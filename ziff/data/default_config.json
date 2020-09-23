@@ -1,0 +1,38 @@
+{
+    "i/o":
+    {
+        "image_hdu": 0,
+        "noise": 1.0,
+        "ra":"TELRA",
+        "dec":"TELDEC",
+        "cat_hdu": 1,
+        "x_col": "xpos",
+        "y_col": "ypos",
+        "sky_col" : "sky",
+        "gain" : "GAIN",
+        "satur" : "SATURATE",
+        "nstars" : 200,
+        "stamp_size" : 15
+    },
+    "psf":
+    {
+        "model":{
+            "type" : "PixelGrid",
+            "interp" : "Lanczos(5)",
+            "scale" : 1.012,
+            "size" : 15,
+            "start_sigma": 2.0,
+            "centered": 0
+        },
+        "interp":{
+            "type" :  "BasisPolynomial",
+            "order" : 2
+        },
+        "outliers":{
+            "include_reserve": 0,
+            "max_remove":5,
+            "nsigma":3,
+            "type":"Chisq"
+        }
+    }
+} 
