@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/24 14:33:56
+# Modified on:       2020/09/24 14:36:20
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -63,9 +63,9 @@ class ZiffCollection(object):
         mt.index = np.arange(np.size(mt,axis=0))
         groupby = mt.groupby(groupby)
         groups = groupby.groups
-        local_data_sciimg = np.asarray(zquery.get_local_data("sciimg.fits"))
+        local_data_sciimg = np.asarray(zquery.get_local_data("sciimg.fits", filecheck = False))
         sciimg_list = [local_data_sciimg[groupby.get_group(i).index.values] for i in groups]
-        local_data_mskimg = np.asarray(zquery.get_local_data("mskimg.fits"))
+        local_data_mskimg = np.asarray(zquery.get_local_data("mskimg.fits", filecheck = False))
         mskimg_list = [local_data_mskimg[groupby.get_group(i).index.values] for i in groups]
         return cls(sciimg_list, mskimg_list, **kwargs) #cls(name, date.today().year - year)
 
