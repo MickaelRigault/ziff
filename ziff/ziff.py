@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/23 15:27:39
+# Modified on:       2020/09/24 14:05:38
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -35,6 +35,7 @@ from .catalog import Catalog, ReferenceCatalog
 import logging
 import piff
 import galsim
+import pandas as pd
 
 collection_functions = [
     'set_config_value',
@@ -58,14 +59,26 @@ class ZiffCollection(object):
         return [getattr(z,attr)(stars = stars_list[i],**kwargs) for (i,z) in enumerate(self.ziffs)]    
     @classmethod
     def from_zquery(cls, zquery,  groupby = ['ccd'], **kwargs):
-        groupby = zquery.metatable.groupby(groupby)
+        mt = zquery.get_local_metatable()
+        mt.index = np.arange(np.size(mt,axis=0))
+        groupby = mt.groupby(groupby)
         groups = groupby.groups
         local_data_sciimg = np.asarray(zquery.get_local_data("sciimg.fits"))
         sciimg_list = [local_data_sciimg[groupby.get_group(i).index.values] for i in groups]
         local_data_mskimg = np.asarray(zquery.get_local_data("mskimg.fits"))
         mskimg_list = [local_data_mskimg[groupby.get_group(i).index.values] for i in groups]
         return cls(sciimg_list, mskimg_list, **kwargs) #cls(name, date.today().year - year)
-    
+
+    def to_file(self, filename):
+        with open(filename,'w') as f:
+            for ziff in self.ziffs:
+                for (i,l0) in enumerate(ziff._sciimg):
+                    if i ==0 :
+                        f.write(l0)
+                    else:
+                        f.write(',' + l0)
+                f.write('\n')
+                
     
 class Ziff(object):
     """Wrapper of PIFF for ZTF
@@ -89,6 +102,11 @@ class Ziff(object):
             if build_default_cat:
                 self.build_default_catalog()
 
+    @classmethod
+    def from_file(cls, filename, row = 0, **kwargs):
+        df = pd.read_csv(filename,header=0,index_col=False,names=(0,1,2,3))
+        return cls(df.loc[row].values, **kwargs)
+        
     @classmethod
     def from_zquery(cls, zquery,  **kwargs):
         sciimg_list = zquery.get_local_data("sciimg.fits")

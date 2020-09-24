@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 11:04:55 $
-# Modified on:       2020/09/21 11:10:37
+# Modified on:       2020/09/24 14:16:18
 # Copyright:         2019, Romain Graziani
 # $Id: setupy.py, 2020/09/21 11:04:55  RG $
 ################################################################################
@@ -34,6 +34,7 @@ setup(name='Ziff',
       author_email='romain.graziani@clermont.in2p3.fr',
       url='https://github.com/rgraz/Ziff',
       packages=['ziff'],
-      package_data={'ziff': ['data/*']}
+      package_data={'ziff': ['data/*']},
+      scripts=['ziff/scripts/*']
      )
 # End of setupy.py ========================================================
