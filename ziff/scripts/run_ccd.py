@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/24 14:06:57 $
-# Modified on:       2020/09/24 14:14:16
+# Modified on:       2020/09/24 19:34:47
 # Copyright:         2019, Romain Graziani
 # $Id: run_ccd.py, 2020/09/24 14:06:57  RG $
 ################################################################################
@@ -49,6 +49,7 @@ z = ziff.ziff.Ziff.from_file(args.filename, row = args.row, build_default_cat = 
 z.set_config_value('psf,interp,order',4)
 z.set_config_value('psf,outliers,max_remove',20)
 map_file = pkg_resources.resource_filename('ziff', 'data/interpolator.pkl')
+
 z.set_config_value('psf,interp,interpolation_map_file',map_file)
 z.set_config_value('psf,interp,type','BasisPolynomialPlusMap')
 if args.run:
@@ -60,7 +61,7 @@ if args.shapes:
     new_stars = z.reflux_stars(stars)
     res = z.compute_residuals(new_stars)
     shapes = z.compute_shapes(new_stars)
-    [np.savez(p + 'shapes') for p in z.prefix]
+    [np.savez(p + 'shapes',**shapes) for p in z.prefix]
 
 
 
