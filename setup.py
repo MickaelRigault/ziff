@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 11:04:55 $
-# Modified on:       2020/09/24 14:16:18
+# Modified on:       2020/09/24 14:17:55
 # Copyright:         2019, Romain Graziani
 # $Id: setupy.py, 2020/09/21 11:04:55  RG $
 ################################################################################
@@ -35,6 +35,6 @@ setup(name='Ziff',
       url='https://github.com/rgraz/Ziff',
       packages=['ziff'],
       package_data={'ziff': ['data/*']},
-      scripts=['ziff/scripts/*']
+      scripts=['ziff/scripts/run_ccd.py']
      )
 # End of setupy.py ========================================================
