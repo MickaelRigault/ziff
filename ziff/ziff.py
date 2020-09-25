@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/24 14:36:20
+# Modified on:       2020/09/25 10:48:28
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -79,7 +79,22 @@ class ZiffCollection(object):
                         f.write(',' + l0)
                 f.write('\n')
                 
-    
+    @classmethod
+    def from_file(cls, filename, **kwargs):
+        df = pd.read_csv(filename,header=0,index_col=False,names=(0,1,2,3))
+        return cls(df.values, **kwargs)
+
+    def read_shapes(self):
+        shapes = self.ziffs[0].read_shapes()
+        keys = list(shapes.keys())
+        shapes = dict(shapes)
+        for z in self.ziffs[1::]:
+            for k in keys:
+                shapes_z = z.read_shapes()
+                shapes[k] = np.hstack([shapes[k],shapes_z[k]])
+        return shapes
+
+        
 class Ziff(object):
     """Wrapper of PIFF for ZTF
     """
@@ -165,6 +180,9 @@ class Ziff(object):
         exec(to_eval,{'config':self.config})
 
 
+    def read_shapes(self):
+        return np.load(self.prefix[0]+'shapes.npz')
+    
     def build_default_calibration_cat(self, num):
         subziff = self.create_singleimg_ziff(num)
         c = ReferenceCatalog(ziff = subziff, which = 'gaia', name = 'gaia_calibration') # Catalog object
@@ -276,7 +294,7 @@ class Ziff(object):
         return inputfile.makeStars(logger=self.logger)
 
     
-    def compute_shapes(self, stars):
+    def compute_shapes(self, stars, save=False):
         shapes = {'instru_flux': [], 'T_data': [], 'T_model': [],'g1_data': [],'g2_data': [],'g1_model': [],'g2_model': [],'u': [],'v': [],'flag_data': [],'flag_model': [],}
         for s in stars:
             s.run_hsm()
@@ -296,6 +314,8 @@ class Ziff(object):
             
         shapes['T_data_normalized'] = shapes['T_data']/np.median(shapes['T_data'])
         shapes['T_model_normalized'] = shapes['T_model']/np.median(shapes['T_data'])
+        if save:
+            [np.savez(p + 'shapes',**shapes) for p in self.prefix]
         return shapes
 
     def reflux_stars(self, stars, fit_center = False, use_minuit = False):
