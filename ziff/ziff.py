@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/25 14:02:09
+# Modified on:       2020/09/25 14:24:15
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -56,7 +56,8 @@ class ZiffCollection(object):
         return [getattr(z,attr)(**kwargs) for z in self.ziffs]
 
     def eval_func_stars(self,attr, stars_list, parallel = False, **kwargs):
-        return [getattr(z,attr)(stars = stars_list[i],**kwargs) for (i,z) in enumerate(self.ziffs)]    
+        return [getattr(z,attr)(stars = stars_list[i],**kwargs) for (i,z) in enumerate(self.ziffs)]
+    
     @classmethod
     def from_zquery(cls, zquery,  groupby = ['ccd'], **kwargs):
         mt = zquery.get_local_metatable(which='dl')
@@ -94,13 +95,21 @@ class ZiffCollection(object):
         shapes = self.ziffs[0].read_shapes()
         keys = list(shapes.keys())
         shapes = dict(shapes)
+        shapes['ccd'] = []
+        shapes['fracday'] = []
+        shapes['quadrants'] = []
+
         for z in self.ziffs[1::]:
             shapes_z = z.read_shapes()
             for k in keys:
                 try:
                     shapes[k] = np.hstack([shapes[k],shapes_z[k]])
+                    length = len(shapes_z['T_data'])
+                    shapes['ccd'] = np.hstack([shapes['ccd'],np.repeat(z.ccd[0],length)])
+                    shapes['fracday'] = np.hstack([shapes['fracday'],np.repeat(z.fracday[0],length) ])                    
                 except:
                     pass
+
         return shapes
 
         
@@ -108,13 +117,14 @@ class Ziff(object):
     """Wrapper of PIFF for ZTF
     """
     
-    def __init__ (self, sciimg, mskimg = None, logger = None, build_default_cat = True, load_default_cat = True):
+    def __init__ (self, sciimg, mskimg = None, logger = None, build_default_cat = True, load_default_cat = True, check_exist = True):
         """        
         """
         sciimg = np.atleast_1d(sciimg)
-        for s in sciimg:
-            if not os.path.exists(s):
-                raise FileNotFoundError("{} does not exist.".format(s))
+        if check_exist:
+            for s in sciimg:
+                if not os.path.exists(s):
+                    raise FileNotFoundError("{} does not exist.".format(s))
         self._sciimg = sciimg
         self.set_mskimg(mskimg)
         self.set_default_config()
@@ -482,4 +492,17 @@ class Ziff(object):
     def nimgs(self):
         """ Number of images used"""
         return len(self._sciimg)
+
+    @property
+    def ccd(self):
+        return [int(p.split('_')[-4][1::]) for p in self.prefix]
+
+    @property
+    def quadrants(self):
+        return [int(p.split('_')[-4][1::]) for p in self.prefix]
+
+    @property
+    def fracday(self):
+        return [int(p.split('/')[-2][1::]) for p in self.prefix]
+
 # End of ziff.py ========================================================
