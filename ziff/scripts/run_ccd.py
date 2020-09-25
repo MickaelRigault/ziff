@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/24 14:06:57 $
-# Modified on:       2020/09/25 11:27:04
+# Modified on:       2020/09/25 12:10:32
 # Copyright:         2019, Romain Graziani
 # $Id: run_ccd.py, 2020/09/24 14:06:57  RG $
 ################################################################################
@@ -37,6 +37,7 @@ import pkg_resources
 parser = argparse.ArgumentParser()
 parser.add_argument("--filename",type=str)
 parser.add_argument("--row",type=int)
+parser.add_argument("--make_cats",type=int,default=1)
 parser.add_argument("--run",type=int,default=1)
 parser.add_argument("--shapes",type=int,default=1)
 
@@ -45,7 +46,13 @@ args = parser.parse_args()
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-z = ziff.ziff.Ziff.from_file(args.filename, row = args.row, build_default_cat = True, load_default_cat = False)
+if args.make_cats:
+    z = ziff.ziff.Ziff.from_file(args.filename, row = args.row, build_default_cat = True, load_default_cat = False)
+    z.save_catalog('gaia_calibration')
+    z.save_catalog('gaia_full')
+
+else:
+    z = ziff.ziff.Ziff.from_file(args.filename, row = args.row, build_default_cat = False, load_default_cat = True)
 z.set_config_value('psf,interp,order',4)
 z.set_config_value('psf,outliers,max_remove',20)
 map_file = pkg_resources.resource_filename('ziff', 'data/interpolator.pkl')
