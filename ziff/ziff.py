@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/25 14:44:13
+# Modified on:       2020/09/25 14:45:28
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -105,10 +105,10 @@ class ZiffCollection(object):
                 try:
                     shapes[k] = np.hstack([shapes[k],shapes_z[k]])
                 except:
-                    break
-                length = len(shapes_z['T_data'])
-                shapes['ccd'] = np.hstack([shapes['ccd'],np.repeat(z.ccd[0],length)])
-                shapes['fracday'] = np.hstack([shapes['fracday'],np.repeat(z.fracday[0],length) ])                    
+                    pass
+            length = len(shapes_z['T_data'])
+            shapes['ccd'] = np.hstack([shapes['ccd'],np.repeat(z.ccd[0],length)])
+            shapes['fracday'] = np.hstack([shapes['fracday'],np.repeat(z.fracday[0],length) ])                    
         return shapes
 
         
