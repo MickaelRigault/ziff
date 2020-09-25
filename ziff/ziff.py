@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/25 11:03:40
+# Modified on:       2020/09/25 11:11:40
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -93,9 +93,12 @@ class ZiffCollection(object):
         keys = list(shapes.keys())
         shapes = dict(shapes)
         for z in self.ziffs[1::]:
+            shapes_z = z.read_shapes()
             for k in keys:
-                shapes_z = z.read_shapes()
-                shapes[k] = np.hstack([shapes[k],shapes_z[k]])
+                try:
+                    shapes[k] = np.hstack([shapes[k],shapes_z[k]])
+                except:
+                    pass
         return shapes
 
         
