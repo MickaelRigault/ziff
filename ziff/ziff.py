@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/25 12:16:01
+# Modified on:       2020/09/25 14:02:09
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -128,8 +128,13 @@ class Ziff(object):
 
     @classmethod
     def from_file(cls, filename, row = 0, **kwargs):
-        df = pd.read_csv(filename,header=0,index_col=False,names=(0,1,2,3))
-        return cls(df.loc[row].values, **kwargs)
+        with open(filename,'r') as f: 
+            lines = f.readlines()
+            for (i,line) in enumerate(lines):
+                if i == row:
+                    sciimg = line[0:-1].split(',')
+                    return cls(sciimg, **kwargs)
+
         
     @classmethod
     def from_zquery(cls, zquery,  **kwargs):

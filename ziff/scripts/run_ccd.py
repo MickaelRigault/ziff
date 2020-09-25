@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/24 14:06:57 $
-# Modified on:       2020/09/25 12:17:23
+# Modified on:       2020/09/25 12:19:01
 # Copyright:         2019, Romain Graziani
 # $Id: run_ccd.py, 2020/09/24 14:06:57  RG $
 ################################################################################
@@ -68,7 +68,6 @@ if args.shapes:
     res = z.compute_residuals(new_stars)
     shapes = z.compute_shapes(new_stars,save=True)
 
-print(z.read_shapes())
 
 
 
