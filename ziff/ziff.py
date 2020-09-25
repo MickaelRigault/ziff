@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/25 14:24:15
+# Modified on:       2020/09/25 14:41:45
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -93,11 +93,11 @@ class ZiffCollection(object):
 
     def read_shapes(self):
         shapes = self.ziffs[0].read_shapes()
+        length = len(shapes['T_data'])
         keys = list(shapes.keys())
         shapes = dict(shapes)
-        shapes['ccd'] = []
-        shapes['fracday'] = []
-        shapes['quadrants'] = []
+        shapes['ccd'] = np.repeat(self.ziffs[0].ccd[0],length)
+        shapes['fracday'] = np.repeat(self.ziffs[0].fracday[0],length)
 
         for z in self.ziffs[1::]:
             shapes_z = z.read_shapes()
