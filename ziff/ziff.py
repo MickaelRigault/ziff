@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/25 11:30:40
+# Modified on:       2020/09/25 12:16:01
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -253,6 +253,13 @@ class Ziff(object):
         else:
             raise TypeError("catalog must be a name or a Catalog")
 
+
+    def save_all_cats(self, overwrite= True):
+        for cat in self.catalog:
+            c = self.process_catalog_name(cat)
+            self.save_catalog(c, self.prefix, overwrite = overwrite)
+        
+            
     def save_catalog(self, cat, prefix, overwrite):
         for (c,p) in zip(cat,prefix):
             c.save_fits(path = p + c.name + '.fits', overwrite = overwrite, filtered=True)

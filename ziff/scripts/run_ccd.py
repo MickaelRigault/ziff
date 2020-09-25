@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/24 14:06:57 $
-# Modified on:       2020/09/25 12:12:58
+# Modified on:       2020/09/25 12:16:27
 # Copyright:         2019, Romain Graziani
 # $Id: run_ccd.py, 2020/09/24 14:06:57  RG $
 ################################################################################
@@ -48,8 +48,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 if args.make_cats:
     z = ziff.ziff.Ziff.from_file(args.filename, row = args.row, build_default_cat = True, load_default_cat = False)
-    z.save_catalog('gaia_calibration',z.prefix,overwrite=True)
-    z.save_catalog('gaia_full',z.prefix,overwrite=True)
+    z.save_all_cats(overwrite = True)
 
 else:
     z = ziff.ziff.Ziff.from_file(args.filename, row = args.row, build_default_cat = False, load_default_cat = True)
