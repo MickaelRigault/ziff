@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/25 10:48:28
+# Modified on:       2020/09/25 11:03:40
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -81,8 +81,12 @@ class ZiffCollection(object):
                 
     @classmethod
     def from_file(cls, filename, **kwargs):
-        df = pd.read_csv(filename,header=0,index_col=False,names=(0,1,2,3))
-        return cls(df.values, **kwargs)
+        list_img = []
+        with open(filename,'r') as f: 
+            lines = f.readlines() 
+            for line in lines: 
+                list_img.append(line[0:-1].split(',')) 
+        return cls(list_img, **kwargs)
 
     def read_shapes(self):
         shapes = self.ziffs[0].read_shapes()
