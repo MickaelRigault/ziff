@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/25 11:29:21
+# Modified on:       2020/09/25 11:30:40
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -84,7 +84,7 @@ class ZiffCollection(object):
         list_img = []
         with open(filename,'r') as f: 
             lines = f.readlines()
-            if max_rows = None:
+            if max_rows is None:
                 max_rows = len(lines)
             for line in lines[0:max_rows]: 
                 list_img.append(line[0:-1].split(',')) 
