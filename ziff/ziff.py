@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/28 10:56:41
+# Modified on:       2020/09/28 11:19:02
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -283,7 +283,11 @@ class Ziff(object):
     
     def build_default_catalog(self):
         print("Building default catalogs")
-        catalogs = [self.build_all_cat(num = i) for i in range(self.nimgs)]
+        #catalogs = [self.build_all_cat(num = i) for i in range(self.nimgs)]
+        # There is an issue with comprehension list and c.download()
+        catalogs = []
+        for i in range(self.nimgs):
+            catalogs.append(self.build_all_cat(num = i))
         self.set_catalog([catalogs[i][0] for i in range(self.nimgs)])
         self.set_catalog([catalogs[i][1] for i in range(self.nimgs)])
 
