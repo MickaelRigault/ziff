@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/28 13:37:33
+# Modified on:       2020/09/28 13:58:02
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -302,6 +302,13 @@ class Ziff(object):
             raise TypeError("catalog must be a name or a Catalog")
 
 
+    def get_stacked_cat_df(self):
+        dfs = {}
+        for cat in self.catalog:
+            c = self.process_catalog_name(cat)
+            dfs[cat] = pd.concat([c[i].df for i  in range(self.nimgs)])
+        return dfs
+    
     def save_all_cats(self, overwrite= True):
         for cat in self.catalog:
             c = self.process_catalog_name(cat)
