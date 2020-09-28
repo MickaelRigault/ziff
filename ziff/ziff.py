@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/28 11:34:24
+# Modified on:       2020/09/28 13:37:33
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -155,7 +155,7 @@ class Ziff(object):
     
     
     def create_singleimg_ziff(self, num):
-        return Ziff(self._sciimg[num],self._mskimg[num],logger=self.logger, load_default_cat = False, build_default_cat = False)
+        return Ziff(self._sciimg[num],self._mskimg[num],logger=self.logger, load_default_cat = False, build_default_cat = False, save_cat = False)
     
     def set_logger(self, logger):
         if logger is None:
