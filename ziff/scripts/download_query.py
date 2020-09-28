@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/25 16:23:01 $
-# Modified on:       2020/09/28 10:10:50
+# Modified on:       2020/09/28 10:12:42
 # Copyright:         2019, Romain Graziani
 # $Id: download_query.py, 2020/09/25 16:23:01  RG $
 ################################################################################
@@ -30,11 +30,11 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--query",type=str,default = "obsjd BETWEEN 2458554.5 AND 2458564")
 
-
+in_query = args.query
 from ztfquery import query
-print(query)
+print(in_query)
 zquery = query.ZTFQuery() 
-zquery.load_metadata(sql_query = query)
+zquery.load_metadata(sql_query = in_query)
 print(zquery.metatable)
 keys = ['sciimg.fits', 'mskimg.fits', 'psfcat.fits']
 for _key in keys:
