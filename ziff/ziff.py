@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/28 14:33:29
+# Modified on:       2020/09/28 15:44:37
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -59,7 +59,7 @@ class ZiffCollection(object):
         return [getattr(z,attr)(stars = stars_list[i],**kwargs) for (i,z) in enumerate(self.ziffs)]
     
     @classmethod
-    def from_zquery(cls, zquery,  groupby = ['ccd'], **kwargs):
+    def from_zquery(cls, zquery,  groupby = ['ccdid','fracday','fid'], **kwargs):
         mt = zquery.get_local_metatable(which='dl')
         mt.index = np.arange(np.size(mt,axis=0))
         groupby = mt.groupby(groupby)
