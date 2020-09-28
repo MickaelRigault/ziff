@@ -8,6 +8,7 @@ import astropy.units as u
 import os
 from astropy.coordinates import Angle, SkyCoord, search_around_sky
 from astropy.wcs import WCS
+import copy
 
 class Catalog(object):
     def __init__(self, ziff, name):
@@ -15,6 +16,18 @@ class Catalog(object):
         self._ziff = ziff
         self._filters = {}
 
+
+    def copy(self, name = None):
+        if name is None:
+            name = name
+        c = Catalog(self._ziff, self._name)
+        c.set_dataframe(self._dataframe.copy())
+        c._filters = copy.deepcopy(self._filters)
+        c.update_filters()
+        return c
+        
+    def change_name(self, new_name):
+        self._name = new_name
     
     def set_astropy_table(self, table):
         raise NotImplementedError("Astropy table not supported")

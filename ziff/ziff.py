@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/28 10:39:26
+# Modified on:       2020/09/28 10:48:58
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -241,6 +241,26 @@ class Ziff(object):
         c.add_filter('is_isolated',[1,2], name = 'isolated_filter')
         return c
 
+    def build_all_cat(self,num):
+        subziff = self.create_singleimg_ziff(num)
+        c = ReferenceCatalog(ziff = subziff, which = 'gaia', name = 'gaia_calibration') # Catalog object
+        c.download() # fetch gaia catalog
+        # Filters
+        c.set_is_isolated()
+        c.set_mask_pixels()
+        c.add_filter('Gmag',[13,16], name = 'mag_filter')
+        c.add_filter('xpos',[20,3030], name = 'border_filter_x')
+        c.add_filter('ypos',[20,3030], name = 'border_filter_y')
+        c.add_filter('is_isolated',[1,2], name = 'isolated_filter')
+        c.add_filter('has_badpix', [-0.5, 0.5], 'filter_badpix')
+        c.df['ra'] = c.df['RA_ICRS']
+        c.df['dec'] = c.df['DE_ICRS']
+        c.set_sky()
+        
+        
+        #c.save_fits(filtered=True)
+        return
+    
     def load_catalog(self, name, num):
         subziff = self.create_singleimg_ziff(num)
         c = Catalog(subziff, name)
@@ -249,8 +269,13 @@ class Ziff(object):
     
     def load_default_catalog(self):
         print("Loading default catalogs")
-        self.set_catalog([self.load_catalog('gaia_calibration',i) for i in range(self.nimgs)])
-        self.set_catalog([self.load_catalog('gaia_full',i) for i in range(self.nimgs)])
+        try:
+            self.set_catalog([self.load_catalog('gaia_calibration',i) for i in range(self.nimgs)])
+            self.set_catalog([self.load_catalog('gaia_full',i) for i in range(self.nimgs)])
+        except FileNotFoundError:
+            print("Catalogs not found")
+            self.build_default_catalog()
+            
     
     def set_catalog(self, catalogs):
         self._catalog[catalogs[0].name] = catalogs
