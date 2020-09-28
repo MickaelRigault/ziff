@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/25 16:23:01 $
-# Modified on:       2020/09/28 10:15:27
+# Modified on:       2020/09/28 10:17:09
 # Copyright:         2019, Romain Graziani
 # $Id: download_query.py, 2020/09/25 16:23:01  RG $
 ################################################################################
@@ -30,6 +30,8 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--query",type=str,default = "obsjd BETWEEN 2458554.5 AND 2458564")
 parser.add_argument("--overwrite",type=int,default = 1)
+parser.add_argument("--nprocess",type=int,default = 1)
+
 
 args = parser.parse_args()
 
@@ -41,7 +43,7 @@ zquery.load_metadata(sql_query = in_query)
 print(zquery.metatable)
 keys = ['sciimg.fits', 'mskimg.fits', 'psfcat.fits']
 for _key in keys:
-    zquery.download_data(_key,show_progress=True, notebook=False, nprocess=8, overwrite = bool(args.overwrite))
+    zquery.download_data(_key,show_progress=True, notebook=False, nprocess=args.nprocess, overwrite = bool(args.overwrite))
         
 
 # End of download_query.py ========================================================
