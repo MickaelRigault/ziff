@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/25 16:23:01 $
-# Modified on:       2020/09/28 09:51:38
+# Modified on:       2020/09/28 10:10:50
 # Copyright:         2019, Romain Graziani
 # $Id: download_query.py, 2020/09/25 16:23:01  RG $
 ################################################################################
@@ -32,6 +32,7 @@ parser.add_argument("--query",type=str,default = "obsjd BETWEEN 2458554.5 AND 24
 
 
 from ztfquery import query
+print(query)
 zquery = query.ZTFQuery() 
 zquery.load_metadata(sql_query = query)
 print(zquery.metatable)
