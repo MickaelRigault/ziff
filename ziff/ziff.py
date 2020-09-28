@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/28 14:06:54
+# Modified on:       2020/09/28 14:22:24
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -372,6 +372,15 @@ class Ziff(object):
                     s._cat_kwargs[key] = df.iloc[i][key]
         return stars
 
+    def get_stars_cat_kwargs(self, stars):
+        out = {}
+        keys = stars[0]._cat_kwargs.keys()
+        for k in keys:
+            out[k] = []
+        for s in stars:
+            for k in keys:
+                out[k].append(s._cat_kwargs[k])
+        return out
     
     def compute_shapes(self, stars, save=False):
         shapes = {'instru_flux': [], 'T_data': [], 'T_model': [],'g1_data': [],'g2_data': [],'g1_model': [],'g2_model': [],'u': [],'v': [],'flag_data': [],'flag_model': [],'center_u' : [],'center_v' : []}
@@ -395,6 +404,9 @@ class Ziff(object):
             
         shapes['T_data_normalized'] = shapes['T_data']/np.median(shapes['T_data'])
         shapes['T_model_normalized'] = shapes['T_model']/np.median(shapes['T_data'])
+        # Adding cat_kwargs
+        if hasattr(stars[0],'_cat_kwargs'):
+            shapes = {**shapes, **self.get_stars_cat_kwargs(stars)}
         if save:
             [np.savez(p + 'shapes',**shapes) for p in self.prefix]
         return shapes
