@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/28 13:58:02
+# Modified on:       2020/09/28 14:06:54
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -351,7 +351,7 @@ class Ziff(object):
             path = self.prefix[0] + 'output.piff'
         self._psf = piff.PSF.read(file_name=path,logger=self.logger)
 
-    def make_stars(self, catalog, prefix = None, overwrite_cat = True):
+    def make_stars(self, catalog, prefix = None, overwrite_cat = True, append_df_key = None):
         if prefix is None:
             prefix = self.prefix
         cat = self.process_catalog_name(catalog)
@@ -362,7 +362,15 @@ class Ziff(object):
         else:
             self.logger.warning("Using already saved catalogs")
         inputfile = self.get_piff_inputfile()
-        return inputfile.makeStars(logger=self.logger)
+        stars = inputfile.makeStars(logger=self.logger)
+        if append_df_key is not None:
+            append_df_key = np.atleast_1d(append_df_key)
+            df = self.get_stacked_cat_df()[catalog]
+            for (i,s) in enumerate(stars):
+                s._cat_kwargs = {}
+                for key in append_df_key:
+                    s._cat_kwargs[key] = df.iloc[i][key]
+        return stars
 
     
     def compute_shapes(self, stars, save=False):
