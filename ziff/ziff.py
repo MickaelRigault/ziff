@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/28 11:26:56
+# Modified on:       2020/09/28 11:34:24
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -133,9 +133,8 @@ class Ziff(object):
             self.load_default_catalog()
         else:
             if build_default_cat:
-                self.build_default_catalog()
-        if save_cat:
-            self.save_all_cats()
+                self.build_default_catalog(save_cat = save_cat)
+
             
 
     @classmethod
@@ -281,7 +280,7 @@ class Ziff(object):
     def set_catalog(self, catalogs):
         self._catalog[catalogs[0].name] = catalogs
     
-    def build_default_catalog(self):
+    def build_default_catalog(self, save_cat = True):
         print("Building default catalogs")
         #catalogs = [self.build_all_cat(num = i) for i in range(self.nimgs)]
         catalogs = []
@@ -289,6 +288,8 @@ class Ziff(object):
             catalogs.append(self.build_all_cat(num = i))
         self.set_catalog([catalogs[i][0] for i in range(self.nimgs)])
         self.set_catalog([catalogs[i][1] for i in range(self.nimgs)])
+        if save_cat:
+            self.save_all_cats()
 
 
     def process_catalog_name(self, catalog):
