@@ -318,14 +318,13 @@ class ReferenceCatalog(Catalog):
         # Sometimes there is an issue with the query, which leads to 0 entries and an index error. In thiscase we just retry.
         if self._which == 'gaia':
             fail = True
-            while fail==False:
+            while fail==True:
                 try:
                     df = self.fetch_gaia_catalog(**kwargs).to_pandas().set_index('Source')
-                    fail = True
+                    fail = False
                 except IndexError:
                     print("Retrying to download gaia cats")
                     pass
-                
             self.set_dataframe(df)
 
     
