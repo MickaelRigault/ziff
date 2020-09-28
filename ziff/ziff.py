@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/28 14:22:24
+# Modified on:       2020/09/28 14:32:45
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -351,7 +351,7 @@ class Ziff(object):
             path = self.prefix[0] + 'output.piff'
         self._psf = piff.PSF.read(file_name=path,logger=self.logger)
 
-    def make_stars(self, catalog, prefix = None, overwrite_cat = True, append_df_key = None):
+    def make_stars(self, catalog, prefix = None, overwrite_cat = True, append_df_keys = None):
         if prefix is None:
             prefix = self.prefix
         cat = self.process_catalog_name(catalog)
@@ -363,12 +363,12 @@ class Ziff(object):
             self.logger.warning("Using already saved catalogs")
         inputfile = self.get_piff_inputfile()
         stars = inputfile.makeStars(logger=self.logger)
-        if append_df_key is not None:
-            append_df_key = np.atleast_1d(append_df_key)
+        [s._cat_kwargs = {} for s in stars]
+        if append_df_keys is not None:
+            append_df_keys = np.atleast_1d(append_df_keys)
             df = self.get_stacked_cat_df()[catalog]
             for (i,s) in enumerate(stars):
-                s._cat_kwargs = {}
-                for key in append_df_key:
+                for key in append_df_keys:
                     s._cat_kwargs[key] = df.iloc[i][key]
         return stars
 
@@ -405,8 +405,7 @@ class Ziff(object):
         shapes['T_data_normalized'] = shapes['T_data']/np.median(shapes['T_data'])
         shapes['T_model_normalized'] = shapes['T_model']/np.median(shapes['T_data'])
         # Adding cat_kwargs
-        if hasattr(stars[0],'_cat_kwargs'):
-            shapes = {**shapes, **self.get_stars_cat_kwargs(stars)}
+        shapes = {**shapes, **self.get_stars_cat_kwargs(stars)}
         if save:
             [np.savez(p + 'shapes',**shapes) for p in self.prefix]
         return shapes
@@ -428,6 +427,7 @@ class Ziff(object):
                 new_s = self.psf.model.reflux_minuit(new_s, fit_center = fit_center)
             else:
                 new_s = self.psf.model.reflux(new_s, fit_center = fit_center)
+            new_s._cat_kwargs = s._cat_kwargs
             new_stars.append(new_s)
         self.psf.model._centered = False
         return new_stars
