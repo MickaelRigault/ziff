@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/25 16:23:01 $
-# Modified on:       2020/09/28 10:12:42
+# Modified on:       2020/09/28 10:13:52
 # Copyright:         2019, Romain Graziani
 # $Id: download_query.py, 2020/09/25 16:23:01  RG $
 ################################################################################
@@ -29,6 +29,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--query",type=str,default = "obsjd BETWEEN 2458554.5 AND 2458564")
+args = parser.parse_args()
 
 in_query = args.query
 from ztfquery import query
