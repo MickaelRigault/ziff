@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/28 10:48:58
+# Modified on:       2020/09/28 10:56:41
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -256,10 +256,11 @@ class Ziff(object):
         c.df['ra'] = c.df['RA_ICRS']
         c.df['dec'] = c.df['DE_ICRS']
         c.set_sky()
+        c2 = c.copy('gaia_full')
         
-        
-        #c.save_fits(filtered=True)
-        return
+        c2.remove_filter('mag_filter')
+        c2.add_filter('Gmag',[12,18], name = 'mag_filter')
+        return (c,c2)
     
     def load_catalog(self, name, num):
         subziff = self.create_singleimg_ziff(num)
@@ -282,9 +283,10 @@ class Ziff(object):
     
     def build_default_catalog(self):
         print("Building default catalogs")
-        self.set_catalog([self.build_default_calibration_cat(num = i) for i in range(self.nimgs)])
-        self.set_catalog([self.build_default_full_cat(num = i) for i in range(self.nimgs)])
-        return
+        catalogs = [self.build_all_cat(num = i) for i in range(self.nimgs)]
+        self.set_catalog([catalogs[i][0] for i in range(self.nimgs)])
+        self.set_catalog([catalogs[i][1] for i in range(self.nimgs)])
+
 
     def process_catalog_name(self, catalog):
         """ Eval if catalog is a name or an object. Returns the object """
