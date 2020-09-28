@@ -193,7 +193,7 @@ class Catalog(object):
     def remove_filter(self, name):
         if name in self.df.keys():
             self.df.drop(name, axis=1, inplace = True)
-            self._filters = self._filters.pop(name)
+            self._filters.pop(name)
             self.update_filter()
         else:
             raise ValueError("Filter {} not found in dataframe.".format(name))
