@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/24 14:06:57 $
-# Modified on:       2020/09/25 12:19:01
+# Modified on:       2020/09/28 10:28:48
 # Copyright:         2019, Romain Graziani
 # $Id: run_ccd.py, 2020/09/24 14:06:57  RG $
 ################################################################################
@@ -64,7 +64,7 @@ if args.run:
 if args.shapes:
     z.set_config_value('i/o,nstars', 2000) 
     stars = z.make_stars('gaia_full',overwrite_cat=True)
-    new_stars = z.reflux_stars(stars)
+    new_stars = z.reflux_stars(stars, fit_center = True, use_minuit = True)
     res = z.compute_residuals(new_stars)
     shapes = z.compute_shapes(new_stars,save=True)
 

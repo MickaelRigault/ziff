@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/25 14:45:28
+# Modified on:       2020/09/28 10:39:26
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -116,7 +116,7 @@ class Ziff(object):
     """Wrapper of PIFF for ZTF
     """
     
-    def __init__ (self, sciimg, mskimg = None, logger = None, build_default_cat = True, load_default_cat = True, check_exist = True):
+    def __init__ (self, sciimg, mskimg = None, logger = None, build_default_cat = True, load_default_cat = True, check_exist = True, save_cat = True):
         """        
         """
         sciimg = np.atleast_1d(sciimg)
@@ -134,6 +134,9 @@ class Ziff(object):
         else:
             if build_default_cat:
                 self.build_default_catalog()
+        if save_cat:
+            self.save_all_cats()
+            
 
     @classmethod
     def from_file(cls, filename, row = 0, **kwargs):
@@ -325,7 +328,7 @@ class Ziff(object):
 
     
     def compute_shapes(self, stars, save=False):
-        shapes = {'instru_flux': [], 'T_data': [], 'T_model': [],'g1_data': [],'g2_data': [],'g1_model': [],'g2_model': [],'u': [],'v': [],'flag_data': [],'flag_model': [],}
+        shapes = {'instru_flux': [], 'T_data': [], 'T_model': [],'g1_data': [],'g2_data': [],'g1_model': [],'g2_model': [],'u': [],'v': [],'flag_data': [],'flag_model': [],'center_u' : [],'center_v' : []}
         for s in stars:
             s.run_hsm()
             ns = self.psf.drawStar(s)
@@ -339,6 +342,8 @@ class Ziff(object):
             shapes['g2_model'].append(ns.hsm[5])
             shapes['u'].append(s.u)
             shapes['v'].append(s.v)
+            shapes['center_u'].append(s.center[0])
+            shapes['center_v'].append(s.center[1])
             shapes['flag_data'].append(s.hsm[6])
             shapes['flag_model'].append(ns.hsm[6])
             
