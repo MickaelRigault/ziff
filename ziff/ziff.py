@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/28 14:32:45
+# Modified on:       2020/09/28 14:33:29
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -363,7 +363,8 @@ class Ziff(object):
             self.logger.warning("Using already saved catalogs")
         inputfile = self.get_piff_inputfile()
         stars = inputfile.makeStars(logger=self.logger)
-        [s._cat_kwargs = {} for s in stars]
+        for s in stars:
+            s._cat_kwargs = {}
         if append_df_keys is not None:
             append_df_keys = np.atleast_1d(append_df_keys)
             df = self.get_stacked_cat_df()[catalog]
