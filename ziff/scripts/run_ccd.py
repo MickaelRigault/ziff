@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/24 14:06:57 $
-# Modified on:       2020/09/28 14:50:03
+# Modified on:       2020/09/29 10:01:37
 # Copyright:         2019, Romain Graziani
 # $Id: run_ccd.py, 2020/09/24 14:06:57  RG $
 ################################################################################
@@ -48,14 +48,13 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 if args.make_cats:
     z = ziff.ziff.Ziff.from_file(args.filename, row = args.row, build_default_cat = True, load_default_cat = False, save_cat = True)
-    z.save_all_cats(overwrite = True)
+    #z.save_all_cats(overwrite = True)
 
 else:
     z = ziff.ziff.Ziff.from_file(args.filename, row = args.row, build_default_cat = False, load_default_cat = True, save_cat = False)
-z.set_config_value('psf,interp,order',4)
+z.set_config_value('psf,interp,order',5)
 z.set_config_value('psf,outliers,max_remove',20)
-map_file = pkg_resources.resource_filename('ziff', 'data/interpolator.pkl')
-
+#map_file = pkg_resources.resource_filename('ziff', 'data/interpolator.pkl')
 #z.set_config_value('psf,interp,interpolation_map_file',map_file)
 #z.set_config_value('psf,interp,type','BasisPolynomialPlusMap')
 

@@ -19,8 +19,8 @@ class Catalog(object):
 
     def copy(self, name = None):
         if name is None:
-            name = name
-        c = Catalog(self._ziff, self._name)
+            name = self._name
+        c = Catalog(self._ziff, name)
         c._dataframe = self._dataframe.copy()
         c._filters = copy.deepcopy(self._filters)
         c.update_filter()
