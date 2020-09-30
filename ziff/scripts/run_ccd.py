@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/24 14:06:57 $
-# Modified on:       2020/09/30 10:05:16
+# Modified on:       2020/09/30 11:15:16
 # Copyright:         2019, Romain Graziani
 # $Id: run_ccd.py, 2020/09/24 14:06:57  RG $
 ################################################################################
@@ -42,6 +42,8 @@ parser.add_argument("--run",type=int,default=1)
 parser.add_argument("--shapes",type=int,default=1)
 parser.add_argument("--interp_order",type=int,default=4)
 parser.add_argument("--nstars",type=int,default=2000)
+parser.add_argument("--shape_nstars",type=int,default=2000)
+
 
 
 
@@ -65,7 +67,7 @@ for row in rows:
     if args.run:
         z.run_piff('gaia_calibration',overwrite_cat=True)    
     if args.shapes:
-        z.set_config_value('i/o,nstars', 2000) 
+        z.set_config_value('i/o,nstars', args.shape_nstars) 
         stars = z.make_stars('gaia_full',overwrite_cat=True, append_df_keys = ['RPmag','BPmag','colormag'])
         new_stars = z.reflux_stars(stars, fit_center = True, use_minuit = True)
         res = z.compute_residuals(new_stars)
