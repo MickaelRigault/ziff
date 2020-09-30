@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/24 14:06:57 $
-# Modified on:       2020/09/30 10:03:06
+# Modified on:       2020/09/30 10:04:19
 # Copyright:         2019, Romain Graziani
 # $Id: run_ccd.py, 2020/09/24 14:06:57  RG $
 ################################################################################
@@ -40,6 +40,8 @@ parser.add_argument("--rows",type=int, nargs='+')
 parser.add_argument("--make_cats",type=int,default=1)
 parser.add_argument("--run",type=int,default=1)
 parser.add_argument("--shapes",type=int,default=1)
+parser.add_argument("--interp_order",type=int,default=4)
+
 
 
 args = parser.parse_args()
@@ -53,7 +55,7 @@ for row in rows:
         z = ziff.ziff.Ziff.from_file(args.filename, row = args.row, build_default_cat = True, load_default_cat = False, save_cat = True)
     else:
         z = ziff.ziff.Ziff.from_file(args.filename, row = args.row, build_default_cat = False, load_default_cat = True, save_cat = False)
-    z.set_config_value('psf,interp,order',5)
+    z.set_config_value('psf,interp,order', args.interp_order)
     z.set_config_value('psf,outliers,max_remove',20)
     #map_file = pkg_resources.resource_filename('ziff', 'data/interpolator.pkl')
     #z.set_config_value('psf,interp,interpolation_map_file',map_file)
