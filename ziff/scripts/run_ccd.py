@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/24 14:06:57 $
-# Modified on:       2020/09/30 11:15:16
+# Modified on:       2020/09/30 14:34:44
 # Copyright:         2019, Romain Graziani
 # $Id: run_ccd.py, 2020/09/24 14:06:57  RG $
 ################################################################################
@@ -65,10 +65,10 @@ for row in rows:
     #z.set_config_value('psf,interp,interpolation_map_file',map_file)
     #z.set_config_value('psf,interp,type','BasisPolynomialPlusMap')
     if args.run:
-        z.run_piff('gaia_calibration',overwrite_cat=True)    
+        z.run_piff('gaia_calibration',overwrite_cat=False)    
     if args.shapes:
         z.set_config_value('i/o,nstars', args.shape_nstars) 
-        stars = z.make_stars('gaia_full',overwrite_cat=True, append_df_keys = ['RPmag','BPmag','colormag'])
+        stars = z.make_stars('gaia_full',overwrite_cat=False, append_df_keys = ['RPmag','BPmag','colormag'])
         new_stars = z.reflux_stars(stars, fit_center = True, use_minuit = True)
         res = z.compute_residuals(new_stars)
         shapes = z.compute_shapes(new_stars,save=True)
