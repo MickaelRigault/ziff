@@ -115,7 +115,7 @@ fig.colorbar(s,ax=axes[0])
 
 s = axes[1].scatter(shapes['u'],shapes['v'],c=np.asarray(shapes['T_model_normalized']),vmin=0.9,vmax=1.1,**scat_kwargs)
 fig.colorbar(s,ax=axes[1])
-axes[0].set_title('T (mode.) (normalized)')
+axes[0].set_title('T (model) (normalized)')
 
 s = axes[2].scatter(shapes['u'],shapes['v'],c=np.asarray(shapes['T_data'])-np.asarray(shapes['T_model']),vmin=-0.05,vmax=0.05,**scat_kwargs)
 fig.colorbar(s,ax=axes[2])
@@ -124,4 +124,29 @@ axes[0].set_title('T residuals (arcsec)')
 
 ![](examples/figures/Tresiduals.png)
 
+## One CCD ( = 4 images)
+
+Piff is able to handle multiple images to fit a PSF model over an entire ccd or event the entire focal plane. This is managed by ziff as you can input a set of images.
+Let's assume we want to fit over a CCD, the commands stay the same.
+
+```python
+imgs = ['ztf_20190301483877_000579_zg_c07_o_q{}_sciimg.fits'.format(i+1) for i in range(4)]
+z = ziff.ziff.Ziff(imgs,logger=logger,load_default_cat= True, build_default_cat = True)
+z.set_config_value('i/o,nstars',1000)
+z.set_config_value('psf,interp,order',4)
+z.set_config_value('psf,outliers,max_remove',20)
+z.run_piff('gaia_calibration',overwrite_cat=True)
+```
+
+This fit the psf.
+Then to check the results, again:
+
+```python
+z.set_config_value('i/o,nstars',10000)
+stars = z.make_stars('gaia_full',overwrite_cat=True)
+new_stars = z.reflux_stars(stars,fit_center=True, use_minuit=True)
+res = z.compute_residuals(new_stars,normed=True,sky=200)
+shapes = z.compute_shapes(new_stars)
+```
+![](examples/figures/ccd_Tresiduals.png)
 
