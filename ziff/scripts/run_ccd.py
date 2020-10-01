@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/24 14:06:57 $
-# Modified on:       2020/10/01 10:12:17
+# Modified on:       2020/10/01 10:24:14
 # Copyright:         2019, Romain Graziani
 # $Id: run_ccd.py, 2020/09/24 14:06:57  RG $
 ################################################################################
@@ -76,9 +76,10 @@ for row in rows:
 
         if args.plot:
             import matplotlib.pyplot as P
-            im_kwargs  = {'origin':'lower', 'vmin' : -0.03, 'vmax': 0.03}
+            im_kwargs  = {'origin':'lower', 'vmin' : -0.1, 'vmax': 0.1}
             fig, axes = P.subplots(1,3,figsize=(6,2))
             axes[0].imshow(res[0].T, **im_kwargs)
+            im_kwargs  = {'origin':'lower', 'vmin' : -0.03, 'vmax': 0.03}
             axes[1].imshow(np.mean(res,axis=0).T, **im_kwargs)
             axes[2].imshow(np.median(res,axis=0).T, **im_kwargs)
             for p in z.prefix:
