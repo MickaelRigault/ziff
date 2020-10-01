@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/24 14:06:57 $
-# Modified on:       2020/10/01 10:02:40
+# Modified on:       2020/10/01 10:12:17
 # Copyright:         2019, Romain Graziani
 # $Id: run_ccd.py, 2020/09/24 14:06:57  RG $
 ################################################################################
@@ -40,6 +40,7 @@ parser.add_argument("--rows",type=int, nargs='+')
 parser.add_argument("--make_cats",type=int,default=1)
 parser.add_argument("--run",type=int,default=1)
 parser.add_argument("--shapes",type=int,default=1)
+parser.add_argument("--plot",type=int,default=1)
 parser.add_argument("--interp_order",type=int,default=4)
 parser.add_argument("--nstars",type=int,default=2000)
 parser.add_argument("--shape_nstars",type=int,default=2000)
