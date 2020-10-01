@@ -150,3 +150,35 @@ shapes = z.compute_shapes(new_stars)
 ```
 ![](examples/figures/ccd_Tresiduals.png)
 
+# Ziff collection
+
+`ZiffCollection` is a class that handles multiple ziffs objects, in order to fit a bunch of images.
+
+A useful way to use `ZiffCollection` is to load it from a ztfquery object and group the images by any key you want. In the following examples, `ZiffCollection` will load a list of `Ziff` objects grouped by `filefracday` and `ccdid`:
+
+```python
+from ztfquery import query
+from ziff.ziff import ZiffCollection
+
+zquery = query.ZTFQuery()
+z = ziff.ziff.ZiffCollection.from_zquery(zquery,groupby=['filefracday','ccdid'])
+```
+All `Ziff` object are  stored in `z.ziffs`.
+To eval a function over all ziffs object, you can use  `eval_func` or `eval_func_stars` :
+
+```python
+#FIT
+z.eval_func('set_config_value',key_path = 'i/o,nstars',value=2000)
+z.eval_func('set_config_value',key_path = 'psf,interp,order',value=4)
+z.eval_func('set_config_value',key_path = 'psf,outliers,max_remove',value=20)
+z.eval_func('run_piff',catalog='gaia_calibration',overwrite_cat = True)
+
+#RESULTS
+z.eval_func('set_config_value',key_path = 'i/o,nstars',value=2000)
+stars = z.eval_func('make_stars',catalog='gaia_full')
+new_stars = z.eval_func_stars('reflux_stars',stars_list = stars, fit_center=False, use_minuit=False)
+res = z.eval_func_stars('compute_residuals',stars_list = new_stars)
+shapes = z.eval_func_stars('compute_shapes',stars)
+
+```
+
