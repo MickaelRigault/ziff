@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/24 14:06:57 $
-# Modified on:       2020/10/01 09:51:52
+# Modified on:       2020/10/01 10:02:40
 # Copyright:         2019, Romain Graziani
 # $Id: run_ccd.py, 2020/09/24 14:06:57  RG $
 ################################################################################
@@ -65,7 +65,7 @@ for row in rows:
     #z.set_config_value('psf,interp,interpolation_map_file',map_file)
     #z.set_config_value('psf,interp,type','BasisPolynomialPlusMap')
     if args.run:
-        z.run_piff('gaia_calibration',overwrite_cat=True)    
+        z.run_piff('gaia_calibration',overwrite_cat=True)
     if args.shapes:
         z.set_config_value('i/o,nstars', args.shape_nstars) 
         stars = z.make_stars('gaia_full',overwrite_cat=False, append_df_keys = ['RPmag','BPmag','colormag'])
@@ -73,6 +73,27 @@ for row in rows:
         res = z.compute_residuals(new_stars)
         shapes = z.compute_shapes(new_stars,save=True)
 
+        if args.plot:
+            import matplotlib.pyplot as P
+            im_kwargs  = {'origin':'lower', 'vmin' : -0.03, 'vmax': 0.03}
+            fig, axes = P.subplots(1,3,figsize=(6,2))
+            axes[0].imshow(res[0].T, **im_kwargs)
+            axes[1].imshow(np.mean(res,axis=0).T, **im_kwargs)
+            axes[2].imshow(np.median(res,axis=0).T, **im_kwargs)
+            for p in z.prefix:
+                fig.savefig(p + 'psf_piff_res.pdf')
+            fig, axes = P.subplots(1,3,figsize=(12,3))
+            scat_kwargs = {'cmap':'RdBu_r', 's':50}
+            s = axes[0].scatter(shapes['u'],shapes['v'],c=np.asarray(shapes['T_data_normalized']),vmin=0.9,vmax=1.1,**scat_kwargs)
+            fig.colorbar(s,ax=axes[0])
+            s = axes[1].scatter(shapes['u'],shapes['v'],c=np.asarray(shapes['T_model_normalized']),vmin=0.9,vmax=1.1,**scat_kwargs)
+            fig.colorbar(s,ax=axes[1])
+            s = axes[2].scatter(shapes['u'],shapes['v'],c=np.asarray(shapes['T_data'])-np.asarray(shapes['T_model']),vmin=-0.05,vmax=0.05,**scat_kwargs)
+            fig.colorbar(s,ax=axes[2])
+            for p in z.prefix:
+                fig.savefig(p + 'psf_piff_shape.pdf')
+
+        
 
 
 

@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/10/01 09:39:15
+# Modified on:       2020/10/01 10:06:20
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -485,7 +485,7 @@ class Ziff(object):
         inputfile.new_setWCS(wcs = self.get_galsimwcs(),logger=self.logger)
         inputfile.setPointing('RA','DEC')
         return inputfile
-    
+
     @property
     def catalog(self):
         """ Dictionnary of catalogs used by Piff"""
