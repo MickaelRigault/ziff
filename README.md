@@ -47,8 +47,8 @@ If no mskimg is given, ziff will look for one using the sciimg prefix. It also b
 Default PSF configuration input to piff is given in `ziff/data/default_config.json` file and is accessible through attribute `z.config`.
 It can be changed the following way:
 ```python
-z.set_config_value('i/o,nstars',200)
-z.set_config_value('psf,interp,order',3)
+z.set_config_value('i/o,nstars',2000) # In general we only have ~200 calibrators / quadrant
+z.set_config_value('psf,interp,order',4)
 z.set_config_value('psf,outliers,max_remove',20)
 ```
 
@@ -80,6 +80,8 @@ shapes = z.compute_shapes(new_stars)
 
 Example of plots:
 
++ Ploting residuals
+
 ```python
 import numpy as np
 import matplotlib.pyplot as P
@@ -100,4 +102,26 @@ i = axes[2].imshow(np.median(residuals,axis=0).T, **im_kwargs)
 fig.colorbar(i,ax=axes[2])
 ```
 ![](examples/figures/residuals.png)
+
+Ploting shapes
+
+```python
+fig, axes = P.subplots(1,3,figsize=(12,3))
+scat_kwargs = {'cmap':'RdBu_r', 's':50}
+
+s = axes[0].scatter(shapes['u'],shapes['v'],c=np.asarray(shapes['T_data_normalized']),vmin=0.9,vmax=1.1,**scat_kwargs)
+axes[0].set_title('T (data) (normalized)')
+fig.colorbar(s,ax=axes[0])
+
+s = axes[1].scatter(shapes['u'],shapes['v'],c=np.asarray(shapes['T_model_normalized']),vmin=0.9,vmax=1.1,**scat_kwargs)
+fig.colorbar(s,ax=axes[1])
+axes[0].set_title('T (mode.) (normalized)')
+
+s = axes[2].scatter(shapes['u'],shapes['v'],c=np.asarray(shapes['T_data'])-np.asarray(shapes['T_model']),vmin=-0.05,vmax=0.05,**scat_kwargs)
+fig.colorbar(s,ax=axes[2])
+axes[0].set_title('T residuals (arcsec)')
+```
+
+![](examples/figures/Tresiduals.png)
+
 
