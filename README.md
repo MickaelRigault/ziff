@@ -84,9 +84,9 @@ Example of plots:
 
 ```python
 import numpy as np
-import matplotlib.pyplot as P
+import matplotlib.pyplot as plt
 
-fig, axes = P.subplots(1,3,figsize=(13,3))
+fig, axes = plt.subplots(1,3,figsize=(13,3))
 im_kwargs  = {'origin':'lower', 'vmin' : -0.1, 'vmax': 0.1}
 i = axes[0].imshow(residuals[0].T, **im_kwargs)
 axes[0].set_title('Flux residualsiduals to one star')
@@ -106,7 +106,7 @@ fig.colorbar(i,ax=axes[2])
 Ploting shapes
 
 ```python
-fig, axes = P.subplots(1,3,figsize=(12,3))
+fig, axes = plt.subplots(1,3,figsize=(12,3))
 scat_kwargs = {'cmap':'RdBu_r', 's':50}
 
 s = axes[0].scatter(shapes['u'],shapes['v'],c=np.asarray(shapes['T_data_normalized']),vmin=0.9,vmax=1.1,**scat_kwargs)
