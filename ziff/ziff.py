@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/09/30 15:03:32
+# Modified on:       2020/10/01 09:39:15
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -241,22 +241,9 @@ class Ziff(object):
         return c
 
     def build_all_cat(self,num):
-        subziff = self.create_singleimg_ziff(num)
-        c = ReferenceCatalog(ziff = subziff, which = 'gaia', name = 'gaia_calibration') # Catalog object
-        c.download() # fetch gaia catalog
-        # Filters
-        c.set_is_isolated()
-        c.set_mask_pixels()
-        c.add_filter('Gmag',[13,16], name = 'mag_filter')
-        c.add_filter('xpos',[20,3030], name = 'border_filter_x')
-        c.add_filter('ypos',[20,3030], name = 'border_filter_y')
-        c.add_filter('is_isolated',[1,2], name = 'isolated_filter')
-        c.add_filter('has_badpix', [-0.5, 0.5], 'filter_badpix')
-        c.df['ra'] = c.df['RA_ICRS']
-        c.df['dec'] = c.df['DE_ICRS']
-        c.set_sky()
-        c2 = c.copy('gaia_full')
-        
+        c = self.build_default_calibration_cat(num)
+
+        c2 = c.copy('gaia_full')        
         c2.remove_filter('mag_filter')
         c2.add_filter('Gmag',[12,18], name = 'mag_filter')
         return (c,c2)
