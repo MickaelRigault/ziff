@@ -48,7 +48,7 @@ Default PSF configuration input to piff is given in `ziff/data/default_config.js
 It can be changed the following way:
 ```python
 z.set_config_value('i/o,nstars',200)
-z.set_config_value('psf,interp,order',2)
+z.set_config_value('psf,interp,order',3)
 z.set_config_value('psf,outliers,max_remove',20)
 ```
 
@@ -56,4 +56,48 @@ The PSF fit itself is done by using `run_piff` method to a catalog or catalog na
 ```python
 z.run_piff('gaia_calibration',overwrite_cat=True)
 ```
+
+The Piff psf is stored in `z.psf`. Note that if you don't run piff but try to call `z.psf`, then it will look in the sciimg's path to check if piff already ran and load the psf if possible.
+
+To then check the results, you can compute residuals to a given star catalog, here the default one named `gaia_full` which was automatically created.
+
+```python
+z.set_config_value('i/o,nstars', 10000)
+
+# Loading the catalog as Piff Stars object
+stars = z.make_stars('gaia_full', overwrite_cat=True)
+
+# Measuring flux and centroid of stars. Right now, you should put use_minuit = True if fit_center=True
+new_stars = z.reflux_stars(stars,fit_center=False, use_minuit=False)
+
+# Computing the residuals 
+residuals = z.compute_residuals(new_stars,normed=True,sky=200)
+
+# Computing shape properties of stars : Size, T, g1, g2 and of the modeled stars
+shapes = z.compute_shapes(new_stars)
+
+```
+
+Example of plots:
+
+```python
+import numpy as np
+import matplotlib.pyplot as P
+
+fig, axes = P.subplots(1,3,figsize=(13,3))
+im_kwargs  = {'origin':'lower', 'vmin' : -0.1, 'vmax': 0.1}
+i = axes[0].imshow(residuals[0].T, **im_kwargs)
+axes[0].set_title('Flux residualsiduals to one star')
+fig.colorbar(i,ax=axes[0])
+
+im_kwargs  = {'origin':'lower', 'vmin' : -0.05, 'vmax': 0.05}
+axes[1].set_title('Mean flux residualsiduals')
+i = axes[1].imshow(np.mean(residuals,axis=0).T, **im_kwargs)
+fig.colorbar(i,ax=axes[1])
+
+axes[2].set_title('Median flux residualsiduals')
+i = axes[2].imshow(np.median(residuals,axis=0).T, **im_kwargs)
+fig.colorbar(i,ax=axes[2])
+```
+![](examples/figures/residuals.png)
 
