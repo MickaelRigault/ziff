@@ -40,7 +40,7 @@ z = Ziff( `ztf_20190917468333_000698_zi_c03_o_q2_sciimg.fits`, mskimg = None )
 
 z.get_ztfimg()[0].show()
 ```
-![](examples/figures/sciimg.pdf)
+![](examples/figures/sciimg.png)
 
 If no mskimg is given, ziff will look for one using the sciimg prefix. It also builds on the fly standard catalogs to calibrate PSF from  gaia online catalogs. These are accessible through the attribute `z.catalog`.
 
