@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/10/02 10:00:33
+# Modified on:       2020/10/02 10:01:10
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -202,7 +202,7 @@ class Ziff(object):
     def read_shapes(self, as_df = True):
         f = np.load(self.prefix[0]+'shapes.npz')
         if as_df:
-            return pd.DataFrame.from_dict({item: f[item] for item in f.files})
+            return pd.DataFrame.from_dict(dict(f))
         return f
     
     def build_default_calibration_cat(self, num):
