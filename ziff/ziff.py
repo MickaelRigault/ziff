@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/10/01 14:10:50
+# Modified on:       2020/10/02 09:54:36
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -92,25 +92,23 @@ class ZiffCollection(object):
         return cls(list_img, **kwargs)
 
     def read_shapes(self):
-        shapes = self.ziffs[0].read_shapes()
-        length = len(shapes['T_data'])
-        keys = list(shapes.keys())
-        shapes = dict(shapes)
-        shapes['ccd'] = np.repeat(self.ziffs[0].ccd[0],length)
-        shapes['fracday'] = np.repeat(self.ziffs[0].fracday[0],length)
+        df = self.ziffs[0].read_shapes()
+        df['ccd'] = self.ziffs[0].ccd[0]
+        df['fracday'] = self.ziffs[0].fracday[0]
+        df['quadrant'] = self.ziffs[0].quadrants[0]
 
-        for z in self.ziffs[1::]:
-            shapes_z = z.read_shapes()
-            for k in keys:
-                try:
-                    shapes[k] = np.hstack([shapes[k],shapes_z[k]])
-                except:
-                    pass
-            length = len(shapes_z['T_data'])
-            shapes['ccd'] = np.hstack([shapes['ccd'],np.repeat(z.ccd[0],length)])
-            shapes['fracday'] = np.hstack([shapes['fracday'],np.repeat(z.fracday[0],length) ])                    
-        return shapes
-
+        for (i,z) in enumerate(self.ziffs[1::]):
+            print('{}/{}'.format(i+1,len(self.ziffs)))
+            try:
+                new_df = z.read_shapes()
+                new_df['quadrant'] = z.quadrants[0]
+                new_df['ccd'] = z.ccd[0]
+                new_df['fracday'] = z.fracday[0]
+                df = pd.concat([df,new_df])
+            except FileNotFoundError:
+                print("ziff {} not found".format(i+1))
+        return df
+    
         
 class Ziff(object):
     """Wrapper of PIFF for ZTF
@@ -205,8 +203,11 @@ class Ziff(object):
         exec(to_eval,{'config':self.config})
 
 
-    def read_shapes(self):
-        return np.load(self.prefix[0]+'shapes.npz')
+    def read_shapes(self, as_df = True):
+        f = np.load(self.prefix[0]+'shapes.npz')
+        if as_df:
+            return pd.DataFrame.from_dict({item: f[item] for item in f.files})
+        return f
     
     def build_default_calibration_cat(self, num):
         subziff = self.create_singleimg_ziff(num)
