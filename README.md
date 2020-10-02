@@ -221,3 +221,14 @@ fig, gs = bs.show_focal_plane('resT')
 ![](examples/figures/focalplane_Tdata.png)
 ![](examples/figures/focalplane_Tmodel.png)
 ![](examples/figures/focalplane_Tres.png)
+
+And same for the astrometry:
+
+```python
+kw = {'vmin':-0.02,'vmax':0.02}
+fig, gs = bs.show_focal_plane('center_u', statistic='median', imshow_kwargs=kw, label='u (arcsec)')
+fig, gs = bs.show_focal_plane('center_v', statistic='median', imshow_kwargs=kw, label='u (arcsec)')
+
+```
+![](examples/figures/focalplane_u.png)
+![](examples/figures/focalplane_v.png)
