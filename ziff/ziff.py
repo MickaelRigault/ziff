@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/10/02 09:54:36
+# Modified on:       2020/10/02 10:00:33
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -92,22 +92,18 @@ class ZiffCollection(object):
         return cls(list_img, **kwargs)
 
     def read_shapes(self):
-        df = self.ziffs[0].read_shapes()
-        df['ccd'] = self.ziffs[0].ccd[0]
-        df['fracday'] = self.ziffs[0].fracday[0]
-        df['quadrant'] = self.ziffs[0].quadrants[0]
-
-        for (i,z) in enumerate(self.ziffs[1::]):
+        dfs = []
+        for (i,z) in enumerate(self.ziffs):
             print('{}/{}'.format(i+1,len(self.ziffs)))
             try:
-                new_df = z.read_shapes()
-                new_df['quadrant'] = z.quadrants[0]
-                new_df['ccd'] = z.ccd[0]
-                new_df['fracday'] = z.fracday[0]
-                df = pd.concat([df,new_df])
+                df = z.read_shapes()
+                df['ccd'] = z.ccd[0]
+                df['fracday'] = z.fracday[0]
+                df['quadrant'] = z.quadrants[0]
+                dfs.append(df)
             except FileNotFoundError:
                 print("ziff {} not found".format(i+1))
-        return df
+        return pd.concat(dfs)
     
         
 class Ziff(object):
