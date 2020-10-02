@@ -182,3 +182,42 @@ shapes = z.eval_func_stars('compute_shapes',stars)
 
 ```
 
+# Binned statistics
+
+`BinnedStatistic` is a class to handle shapes measurements of a psf model on several exposures and CCDs.
+Let's suppose you have computed the shapes of many stars using a `ZiffCollection` object:
+
+```python
+from ztfquery import query
+zquery = query.ZTFQuery()
+zquery.load_metadata(sql_query = "fid=1 and (obsjd BETWEEN 2458743.9 AND 2458744)" )
+
+from ziff.ziff import ZiffCollection
+z = ziff.ziff.ZiffCollection.from_zquery(zquery, groupby=['ccdid','filefracday'], build_default_cat = False, load_default_cat = False, save_cat  = False)
+
+# You need to have run all psf and shapes of all ziffs in z.ziffs
+shapes =  z.read_shapes() #Read all computed shapes
+#Needs to compute the residuals firs
+shapes['resT'] = shapes['T_model'] - shapes['T_data']
+```
+
+Then you can analyze the results with `BinnedStatistic`
+
+```python
+
+from ziff.stats import BinnedStatistic
+bs = BinnedStatistic(shapes,groupby=['ccd'])
+
+# Some filters of the data
+bs.add_filter('RPmag',[12,18])
+bs.add_filter('colormag',[-5,5])
+
+fig, gs = bs.show_focal_plane('T_data', norm_key = 'T_data',norm_stat='median', norm_groupby=['ccd','fracday'])
+fig, gs = bs.show_focal_plane('T_model', norm_key = 'T_data')
+fig, gs = bs.show_focal_plane('resT')
+
+
+```
+![](examples/figures/focalplane_Tdata.png)
+![](examples/figures/focalplane_Tmodel.png)
+![](examples/figures/focalplane_Tres.png)
