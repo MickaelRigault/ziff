@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/10/02 10:48:39 $
-# Modified on:       2020/10/05 11:24:48
+# Modified on:       2020/10/05 14:52:54
 # Copyright:         2019, Romain Graziani
 # $Id: stats.py, 2020/10/02 10:48:39  RG $
 ################################################################################
@@ -111,7 +111,9 @@ class BinnedStatistic(object):
     def nbins(self):
         return self._nbins
     
-        
+    @property
+    def groups(self):
+        return self._groupby.groups
 
     
     
