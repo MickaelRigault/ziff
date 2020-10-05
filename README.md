@@ -19,6 +19,20 @@ python setup.py install
 
 (Requirements galsim, treecorr, available @ https://github.com/rmjarvis, together with latest version of Piff)
 
+#### TreeCorr
+
+See [TreeCorr](https://github.com/rmjarvis/TreeCorr)
+```
+conda update -c conda-forge treecorr
+```
+
+#### GalSim
+
+See [GalSim](https://github.com/GalSim-developers/GalSim)
+```
+conda install -c conda-forge galsim
+```
+
 And ztfquery, ztfimg  (available @ https://github.com/MickaelRigault)
 
 Then,
