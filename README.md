@@ -19,6 +19,12 @@ python setup.py install
 
 (Requirements galsim, treecorr, available @ https://github.com/rmjarvis, together with latest version of Piff)
 
+if you have this issue:`error: Setup script exited with error: Could not find PyBind11`, do:
+
+`cd` to your `anaconda3/include`
+`ln -s python3.7m/pybind11`
+see (https://github.com/rmjarvis/Piff/issues/92)
+
 #### TreeCorr
 
 See [TreeCorr](https://github.com/rmjarvis/TreeCorr)
