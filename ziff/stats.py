@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/10/02 10:48:39 $
-# Modified on:       2020/10/02 14:41:44
+# Modified on:       2020/10/05 11:24:48
 # Copyright:         2019, Romain Graziani
 # $Id: stats.py, 2020/10/02 10:48:39  RG $
 ################################################################################
@@ -28,6 +28,7 @@ __adv__ = 'stats.py'
 
 import numpy as np
 from scipy.stats import binned_statistic_2d
+import matplotlib.pyplot as plt
 from .plots import make_focal_plane, get_ax_ccd, get_ax_cbar
 
 class BinnedStatistic(object):
@@ -50,7 +51,16 @@ class BinnedStatistic(object):
             flag *= (df[f['key']].values < f['range'][1]) * (df[f['key']].values >= f['range'][0])
         return flag.astype(bool)
 
-
+    def scatter_plot_group(self, group, key = 'T_data', **kwargs):
+        group = self._groupby.get_group(group)
+        flag = self.get_flag(group)
+        group = group[flag]
+        fig, ax = plt.subplots()
+        scat_kwargs = {'cmap':'RdBu_r', 's':50, 'vmin':0.9, 'vmax':1.1}
+        s = ax.scatter(group['u'],group['v'],c=np.asarray(group[key]),**{**scat_kwargs,**kwargs})
+        fig.colorbar(s,ax=ax)
+        return fig, ax
+    
     def compute_groupby_statistic(self, key = 'T_data', statistic = 'mean'):
         return getattr(getattr(self._groupby,key),statistic)()
 
@@ -80,7 +90,7 @@ class BinnedStatistic(object):
             ax, i, j = get_ax_ccd(fig, gs, ccd)
             bins_u, bins_v, hist = self.get_group_hist(key, ccd, **hist_kwargs)
             default_imshow_kwargs =  {'cmap' : 'viridis', 'origin':'lower', 'extent' : (bins_u[0],bins_u[-1],bins_v[0],bins_v[-1])}
-            im = ax.imshow(hist.T, **{**imshow_kwargs,**default_imshow_kwargs})
+            im = ax.imshow(hist.T, **{**default_imshow_kwargs,**imshow_kwargs})
             if i<3:
                 ax.get_xaxis().set_visible(False)
             if j>0:

@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/24 14:06:57 $
-# Modified on:       2020/10/01 10:24:14
+# Modified on:       2020/10/05 09:46:46
 # Copyright:         2019, Romain Graziani
 # $Id: run_ccd.py, 2020/09/24 14:06:57  RG $
 ################################################################################
@@ -62,11 +62,14 @@ for row in rows:
     z.set_config_value('psf,interp,order', args.interp_order)
     z.set_config_value('i/o,nstars', args.nstars) 
     z.set_config_value('psf,outliers,max_remove',20)
+
     #map_file = pkg_resources.resource_filename('ziff', 'data/interpolator.pkl')
     #z.set_config_value('psf,interp,interpolation_map_file',map_file)
     #z.set_config_value('psf,interp,type','BasisPolynomialPlusMap')
+
     if args.run:
         z.run_piff('gaia_calibration',overwrite_cat=True)
+        
     if args.shapes:
         z.set_config_value('i/o,nstars', args.shape_nstars) 
         stars = z.make_stars('gaia_full',overwrite_cat=False, append_df_keys = ['RPmag','BPmag','colormag'])

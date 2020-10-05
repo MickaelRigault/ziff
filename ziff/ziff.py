@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/10/02 10:01:10
+# Modified on:       2020/10/05 10:31:24
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -546,7 +546,7 @@ class Ziff(object):
 
     @property
     def quadrants(self):
-        return [int(p.split('_')[-4][1::]) for p in self.prefix]
+        return [int(p.split('_')[-2][1::]) for p in self.prefix]
 
     @property
     def fracday(self):

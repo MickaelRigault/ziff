@@ -100,7 +100,7 @@ class Catalog(object):
 
     def set_sky(self):
         bkgd = self.ziff.get_ztfimg()[0].get_background()
-        self.df['sky'] = bkgd[N.clip(self.xpos,0,3000).astype(int),N.clip(self.ypos,0,3000).astype(int)]
+        self.df['sky'] = bkgd[N.clip(self.ypos,0,self.ziff.shape[0]-1).astype(int),N.clip(self.xpos,0,self.ziff.shape[1]-1).astype(int)]
         
     def get_ypos(self):
         # If in keys, used keys
