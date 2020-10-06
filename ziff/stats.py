@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/10/02 10:48:39 $
-# Modified on:       2020/10/05 17:06:13
+# Modified on:       2020/10/06 10:46:45
 # Copyright:         2019, Romain Graziani
 # $Id: stats.py, 2020/10/02 10:48:39  RG $
 ################################################################################
@@ -72,49 +72,52 @@ class BinnedStatistic(object):
     def set_nbins(self, nbins):
         self._nbins = nbins
 
-    def get_1d_hist(self, x, values, statistic = 'median'):
-        if isinstance(x,str):
-            x = self._shapes[x]
-        bins = np.linspace(np.min(x),np.max(x),self.nbins)
-        return bins, binned_statistic(x, values, statistic = statistic, bins = bins)
+    def get_1d_bs(self, x_key, v_key, group = None, statistic = 'median', norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median', nbins=None):
+        if group is not None:
+            group = self._groupby.get_group(group)
+        else:
+            group = self._shapes
+        if nbins is None:
+            nbins = self._nbins
+        flag = self.get_flag(group)
+        group  = group[flag]
+        bins = np.linspace(np.min(group[x_key]),np.max(group[x_key]), nbins)
+        normalization = self.get_normalization(group, norm_key, norm_groupby, norm_stat)
+        return bins, binned_statistic(group[x_key], group[v_key]/normalization, statistic = statistic, bins = bins)
+
+    def show_1d_bs(self, x_key, v_key, group = None, statistic = 'median', norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median', nbins=None, **kwargs):
+        fig, ax = plt.subplots()
+        bins, bs = self.get_1d_bs(x_key, v_key, group = group, statistic = statistic, norm_key = norm_key , norm_groupby = norm_groupby, norm_stat = norm_stat, nbins=nbins)
+        default_kwargs = {'marker':'.', 'linestyle':''}
+        ax.plot(bins[0:-1],bs[0],**{**default_kwargs,**kwargs})
+        ax.set_xlabel(x_key)
+        ax.set_ylabel('{} (normed : {})'.format(v_key, norm_key))
+        ax.set_title('{}'.format(statistic))
+        return fig, ax
 
     def get_normalization(self, df = None,  norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median'):
+        if norm_key is None:
+            return 1
         if df is None:
             df =  self._shapes
         return getattr(df.groupby(norm_groupby),norm_key).transform(norm_stat).values
-    
-    def get_group_1d_hist(self, x, key, group,  statistic = 'median', norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median', **kwargs):
-        group = self._groupby.get_group(group)
-        flag = self.get_flag(group)
-        group = group[flag]
-        if isinstance(x,str):
-            x = group[x]
-        if norm_key is not None:
-            normalization = self.get_normalization(group, norm_key, norm_groupby, norm_stat)
+
+    def get_spatial_bs(self, key, group = None,  statistic = 'median', norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median'):
+        if group is not None:
+            group = self._groupby.get_group(group)
         else:
-            normalization  = 1
-        return self.get_1d_hist(x, group[key].values/normalization, statistic = statistic)
-
-
-    def get_uv_hist(self, u, v, data, statistic = 'median'):
-        bins_u, bins_v = self.get_bins(u,v)
-        return bins_u, bins_v, binned_statistic_2d(u, v, data, statistic=statistic, bins=[bins_u,bins_v]).statistic
-
-    def get_group_uv_hist(self, key, group, statistic = 'median', norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median'):
-        group = self._groupby.get_group(group)
+            group = self._shapes
         flag = self.get_flag(group)
-        group = group[flag]
-        if norm_key is not None:
-            normalization = self.get_normalization(group, norm_key, norm_groupby, norm_stat)
-        else:
-            normalization  = 1
-        return self.get_uv_hist(group['u'].values, group['v'].values, group[key].values/normalization, statistic = statistic)
+        group  = group[flag]
+        bins_u, bins_v = self.get_bins(group['u'],group['v'])
+        normalization = self.get_normalization(group, norm_key, norm_groupby, norm_stat)
+        return bins_u, bins_v, binned_statistic_2d(group['u'], group['v'], group[key]/normalization, statistic=statistic, bins=[bins_u,bins_v]).statistic
 
     def show_focal_plane(self, key, label = '', imshow_kwargs = {}, **hist_kwargs):
         fig, gs = make_focal_plane()
         for ccd in range(1,17):
             ax, i, j = get_ax_ccd(fig, gs, ccd)
-            bins_u, bins_v, hist = self.get_group_uv_hist(key, ccd, **hist_kwargs)
+            bins_u, bins_v, hist = self.get_spatial_bs(key, ccd, **hist_kwargs)
             default_imshow_kwargs =  {'cmap' : 'viridis', 'origin':'lower', 'extent' : (bins_u[0],bins_u[-1],bins_v[0],bins_v[-1])}
             im = ax.imshow(hist.T, **{**default_imshow_kwargs,**imshow_kwargs})
             if i<3:

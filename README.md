@@ -258,6 +258,6 @@ But if you want to check the first exposure for instance:
 ```python
 bs = BinnedStatistic(shapes, groupby=['fracday'])
 group = bs.groups[0]
-fig, ax = bs.scatter_plot_group(group, 'T_data', s=5,vmin=0.7,vmax=1.5)
+fig, ax = bs.scatter_plot_group(group, 'T_data', s=5,vmin=1.05,vmax=1.25)
 ```
 ![](examples/figures/focalplane_scatter_fracday.png)
