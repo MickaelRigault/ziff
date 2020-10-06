@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/10/02 10:48:39 $
-# Modified on:       2020/10/05 14:52:54
+# Modified on:       2020/10/05 17:06:13
 # Copyright:         2019, Romain Graziani
 # $Id: stats.py, 2020/10/02 10:48:39  RG $
 ################################################################################
@@ -27,7 +27,7 @@ __adv__ = 'stats.py'
 
 
 import numpy as np
-from scipy.stats import binned_statistic_2d
+from scipy.stats import binned_statistic_2d, binned_statistic
 import matplotlib.pyplot as plt
 from .plots import make_focal_plane, get_ax_ccd, get_ax_cbar
 
@@ -45,7 +45,9 @@ class BinnedStatistic(object):
             name = key
         self._filters[name] = {'key': key, 'range' : range}
 
-    def get_flag(self, df):
+    def get_flag(self, df = None):
+        if df is None:
+            df = self._shapes
         flag = np.ones(np.size(df,axis=0))
         for f in self._filters.values():
             flag *= (df[f['key']].values < f['range'][1]) * (df[f['key']].values >= f['range'][0])
@@ -70,25 +72,49 @@ class BinnedStatistic(object):
     def set_nbins(self, nbins):
         self._nbins = nbins
 
-    def get_hist(self, u, v, data, statistic = 'median'):
+    def get_1d_hist(self, x, values, statistic = 'median'):
+        if isinstance(x,str):
+            x = self._shapes[x]
+        bins = np.linspace(np.min(x),np.max(x),self.nbins)
+        return bins, binned_statistic(x, values, statistic = statistic, bins = bins)
+
+    def get_normalization(self, df = None,  norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median'):
+        if df is None:
+            df =  self._shapes
+        return getattr(df.groupby(norm_groupby),norm_key).transform(norm_stat).values
+    
+    def get_group_1d_hist(self, x, key, group,  statistic = 'median', norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median', **kwargs):
+        group = self._groupby.get_group(group)
+        flag = self.get_flag(group)
+        group = group[flag]
+        if isinstance(x,str):
+            x = group[x]
+        if norm_key is not None:
+            normalization = self.get_normalization(group, norm_key, norm_groupby, norm_stat)
+        else:
+            normalization  = 1
+        return self.get_1d_hist(x, group[key].values/normalization, statistic = statistic)
+
+
+    def get_uv_hist(self, u, v, data, statistic = 'median'):
         bins_u, bins_v = self.get_bins(u,v)
         return bins_u, bins_v, binned_statistic_2d(u, v, data, statistic=statistic, bins=[bins_u,bins_v]).statistic
 
-    def get_group_hist(self, key, group, statistic = 'median', norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median'):
+    def get_group_uv_hist(self, key, group, statistic = 'median', norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median'):
         group = self._groupby.get_group(group)
         flag = self.get_flag(group)
         group = group[flag]
         if norm_key is not None:
-            normalization = getattr(group.groupby(norm_groupby),norm_key).transform(norm_stat).values
+            normalization = self.get_normalization(group, norm_key, norm_groupby, norm_stat)
         else:
             normalization  = 1
-        return self.get_hist(group['u'].values, group['v'].values, group[key].values/normalization, statistic = statistic)
+        return self.get_uv_hist(group['u'].values, group['v'].values, group[key].values/normalization, statistic = statistic)
 
     def show_focal_plane(self, key, label = '', imshow_kwargs = {}, **hist_kwargs):
         fig, gs = make_focal_plane()
         for ccd in range(1,17):
             ax, i, j = get_ax_ccd(fig, gs, ccd)
-            bins_u, bins_v, hist = self.get_group_hist(key, ccd, **hist_kwargs)
+            bins_u, bins_v, hist = self.get_group_uv_hist(key, ccd, **hist_kwargs)
             default_imshow_kwargs =  {'cmap' : 'viridis', 'origin':'lower', 'extent' : (bins_u[0],bins_u[-1],bins_v[0],bins_v[-1])}
             im = ax.imshow(hist.T, **{**default_imshow_kwargs,**imshow_kwargs})
             if i<3:
