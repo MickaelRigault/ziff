@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/10/02 10:48:39 $
-# Modified on:       2020/10/06 10:46:45
+# Modified on:       2020/10/06 15:31:30
 # Copyright:         2019, Romain Graziani
 # $Id: stats.py, 2020/10/02 10:48:39  RG $
 ################################################################################
@@ -27,6 +27,7 @@ __adv__ = 'stats.py'
 
 
 import numpy as np
+import pandas as pd
 from scipy.stats import binned_statistic_2d, binned_statistic
 import matplotlib.pyplot as plt
 from .plots import make_focal_plane, get_ax_ccd, get_ax_cbar
@@ -38,6 +39,7 @@ class BinnedStatistic(object):
         self._filters = {}
         self.add_filter('flag_data', [0,1])
         self.add_filter('flag_model', [0,1])
+        self._groupby_in = groupby
         self._groupby = shapes.groupby(groupby)
 
     def add_filter(self, key, range, name = None):
@@ -54,7 +56,7 @@ class BinnedStatistic(object):
         return flag.astype(bool)
 
     def scatter_plot_group(self, group, key = 'T_data', **kwargs):
-        group = self._groupby.get_group(group)
+        group = self.get_group(group)
         flag = self.get_flag(group)
         group = group[flag]
         fig, ax = plt.subplots()
@@ -72,9 +74,17 @@ class BinnedStatistic(object):
     def set_nbins(self, nbins):
         self._nbins = nbins
 
+    def get_group(self, groups):
+        size = len(self._groupby_in)
+        if size > 1:
+            groups = np.atleast_2d(groups)
+            return pd.concat([self._groupby.get_group(tuple(g)) for g in groups])
+        groups = np.atleast_1d(groups)
+        return pd.concat([self._groupby.get_group(g) for g in groups])
+        
     def get_1d_bs(self, x_key, v_key, group = None, statistic = 'median', norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median', nbins=None):
         if group is not None:
-            group = self._groupby.get_group(group)
+            group = self.get_group(group)
         else:
             group = self._shapes
         if nbins is None:
@@ -85,15 +95,16 @@ class BinnedStatistic(object):
         normalization = self.get_normalization(group, norm_key, norm_groupby, norm_stat)
         return bins, binned_statistic(group[x_key], group[v_key]/normalization, statistic = statistic, bins = bins)
 
-    def show_1d_bs(self, x_key, v_key, group = None, statistic = 'median', norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median', nbins=None, **kwargs):
-        fig, ax = plt.subplots()
+    def show_1d_bs(self, x_key, v_key, group = None, statistic = 'median', norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median', nbins=None, ax = None, **kwargs):
+        if ax is None:
+            fig, ax = plt.subplots()
         bins, bs = self.get_1d_bs(x_key, v_key, group = group, statistic = statistic, norm_key = norm_key , norm_groupby = norm_groupby, norm_stat = norm_stat, nbins=nbins)
         default_kwargs = {'marker':'.', 'linestyle':''}
         ax.plot(bins[0:-1],bs[0],**{**default_kwargs,**kwargs})
         ax.set_xlabel(x_key)
         ax.set_ylabel('{} (normed : {})'.format(v_key, norm_key))
         ax.set_title('{}'.format(statistic))
-        return fig, ax
+        return ax
 
     def get_normalization(self, df = None,  norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median'):
         if norm_key is None:
@@ -102,14 +113,14 @@ class BinnedStatistic(object):
             df =  self._shapes
         return getattr(df.groupby(norm_groupby),norm_key).transform(norm_stat).values
 
-    def get_spatial_bs(self, key, group = None,  statistic = 'median', norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median'):
+    def get_spatial_bs(self, key, group = None,  statistic = 'median', norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median', nbins = None):
         if group is not None:
-            group = self._groupby.get_group(group)
+            group = self.get_group(group)
         else:
             group = self._shapes
         flag = self.get_flag(group)
         group  = group[flag]
-        bins_u, bins_v = self.get_bins(group['u'],group['v'])
+        bins_u, bins_v = self.get_bins(group['u'],group['v'],nbins)
         normalization = self.get_normalization(group, norm_key, norm_groupby, norm_stat)
         return bins_u, bins_v, binned_statistic_2d(group['u'], group['v'], group[key]/normalization, statistic=statistic, bins=[bins_u,bins_v]).statistic
 
@@ -131,9 +142,11 @@ class BinnedStatistic(object):
 
         return fig, gs
 
-    def get_bins(self, u, v):
-        bins_u = np.linspace(np.min(u),np.max(u),self.nbins)
-        bins_v = np.linspace(np.min(v),np.max(v),self.nbins)
+    def get_bins(self, u, v, nbins = None):
+        if nbins is None:
+            nbins = self.nbins
+        bins_u = np.linspace(np.min(u),np.max(u),nbins)
+        bins_v = np.linspace(np.min(v),np.max(v),nbins)
         return bins_u, bins_v
 
     @property
