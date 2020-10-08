@@ -1,160 +1,250 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import numpy as N
+import numpy as np
 import pandas as pd
-import astropy.io as aio
+import warnings
+from astropy.io import fits #as aio
 import astropy.units as u
 import os
 from astropy.coordinates import Angle, SkyCoord, search_around_sky
 from astropy.wcs import WCS
 import copy
 
+
+######################
+#                    #
+#     Catalog        #
+#                    #
+######################
 class Catalog(object):
+    
     def __init__(self, ziff, name):
+        """ """
         self._name = name
         self._ziff = ziff
         self._filters = {}
 
+    def __str__(self):
+        """ printing method """
+        out = "{} object \n".format(self.__class__.__name__)
+        out += "Name  : {}\n".format(self._name)
+        if hasattr(self, '_dataframe'):
+            out += "Number of stars : {}".format(np.size(self.data.loc[self.filterflag],axis=0))
+        return out
 
-    def copy(self, name = None):
+    @classmethod
+    def load(cls, filename, extension=None, name="catalog", ziff=None):
+        """ """
+        data = fits.getdata(filename, ext=extension)
+        this = cls(ziff, name)
+        this.set_data(pd.DataFrame(data).set_index('Source'))
+        return this
+
+    @classmethod
+    def load_from_ziffztfcat(cls, ziff, name="ztfcat"):
+        """ loads from ziff.ztfcat[0] """
+        this = cls(ziff, name)
+        f = fits.open( this.ziff.ztfcat[0] )
+        this.set_data(pd.DataFrame(f[1].data).set_index('sourceid'))
+        return this
+
+    
+    def copy(self, name = None, **kwargs):
+        """ """        
         if name is None:
             name = self._name
-        c = Catalog(self._ziff, name)
+            
+        c = self.__class__(self._ziff, name, **kwargs)
         c._dataframe = self._dataframe.copy()
         c._filters = copy.deepcopy(self._filters)
         c.update_filter()
         return c
         
+    # ================ #
+    #   Methods        #
+    # ================ #
     def change_name(self, new_name):
+        """ change the name on the current catalog. """        
         self._name = new_name
+
+    # -------- #
+    #  SETTER  #
+    # -------- #
+    def set_data(self, dataframe):
+        """ Set the current dataframe as catalog data. """
+        if type(dataframe) != pd.DataFrame:
+            try:
+                dataframe = pd.DataFrame(dataframe)
+            except:
+                raise TypeError("The input dataframe is not a DataFrame and cannot be converted into one.")
+            
+        self._data = dataframe
+        for k in dataframe.keys():
+            self._data[k] = self._data[k].values.byteswap().newbyteorder()
+            
+        self._data['filter'] = 1
+
+    def set_dataframe(self, dataframe):
+        # I WOULD REMOVE AND CALL SET_DATAFRAME -> SET_DATA
+        print("DEPRECATED self.set_dataframe is deprecated use self.set_data(dataframe)")
+        return self.set_data(dataframe)
     
-    def set_astropy_table(self, table):
-        raise NotImplementedError("Astropy table not supported")
-
-
-    def set_dataframe(self, df):
-        self._dataframe = df
-        for k in df.keys():
-            self._dataframe[k] = self._dataframe[k].values.byteswap().newbyteorder()
-        self._dataframe['filter'] = 1
-
-    def set_data(self, data):
-        if type(data) == pd.DataFrame:
-            self.set_dataframe(data)
-        else:
-            raise NotImplementedError("Type {} not implemented".format(type(data)))
-
-    def __str__(self):
+    # - Extra Info
+    def set_sky(self, sky=None):
+        """ Set the sky (background) column.
         
-        out = "{} object \n".format(self.__class__.__name__)
-        out += "Name  : {}\n".format(self._name)
-        if hasattr(self, '_dataframe'):
-            out += "Number of stars : {}".format(N.size(self.df.loc[self.df['filter']==1],axis=0))
-        return out
-
-    def hasdata(self):
-        if hasattr(self, '_dataframe'):
-            return True
-        return False
-
-    def get_data(self, return_type = 'df'):
+        Parameters
+        ----------
+        sky: [array or None]
+            values corresponding to the sky background. It will be added to the curret data as 'sky' column.
+            If None, the ziff backgroud will be used.
+        """
+        if sky is None:
+            bkgd = self.ziff.get_ztfimg()[0].get_background()
+            self.data['sky'] = bkgd[np.clip(self.ypos,0,self.ziff.shape[0]-1).astype(int),np.clip(self.xpos,0,self.ziff.shape[1]-1).astype(int)]
+        else:
+            self.data['sky'] = sky
+            
+    # -------- #
+    #  GETTER  #
+    # -------- #
+    def get_data(self, filtered=False):
         """
         return_type = [df, astropy]
         """
-        
         if not self.hasdata():
-            raise ValueError("You must set_astropy_table(), set_dataframe() or set_data()")
-        if return_type == 'df':
-            return self.dataframe
-        raise ValueError("return_type = {} not udnerstood. Only df possible so far.".format(return_type))
+            raise AttributeError("No data set yet. Use self.set_data()")
 
+        return self.data[self.filterflag] if filtered else self.data
+        
+
+    #  RA/Dec
+    def get_skycoord(self, filtered = False):
+        if filtered:
+            return SkyCoord(self.ra.values[self.filtered_iindex],self.dec.values[self.filtered_iindex], unit = u.deg)
+        return SkyCoord(self.ra.values,self.dec.values, unit = u.deg)
+    
     def get_ra(self):
+        """ Get the Right ascension column """
         keys = ['RA_ICRS','RA','ra']
         for k in keys:
             try:
-                return self.df[k]
+                return self.data[k]
             except:
                 pass
         raise ValueError("Keys {} not in dataframe".format(keys))
     
     def get_dec(self):
+        """ Get the Declination ascension column """
         keys = ['DE_ICRS','DE','de','DEC','dec']
         for k in keys:
             try:
-                return self.df[k]
+                return self.data[k]
             except:
                 pass
         raise ValueError("Keys {} not in dataframe".format(keys))
 
+    #  CCD Position (x/y)
     def get_xpos(self):
+        """ Get the ccd x position column """
         # If in keys, used keys
         keys = ['x','xpos']
         for k in keys:
             try:
-                return self.df[k].values
+                return self.data[k].values
             except:
                 pass
+            
         # Else compute it
         return self.get_xy_from_radec()[0]
-
-    def set_sky(self):
-        bkgd = self.ziff.get_ztfimg()[0].get_background()
-        self.df['sky'] = bkgd[N.clip(self.ypos,0,self.ziff.shape[0]-1).astype(int),N.clip(self.xpos,0,self.ziff.shape[1]-1).astype(int)]
         
     def get_ypos(self):
         # If in keys, used keys
         keys = ['y','ypos']
         for k in keys:
             try:
-                return self.df[k].values
+                return self.data[k].values
             except:
                 pass
         # Else compute it
         # Note that we could save them but for now we don't
         return self.get_xy_from_radec()[1]
 
-    def get_xy_from_radec(self):
-        xy = N.stack(self.ziff.wcs[0].world_to_pixel_values(N.transpose([self.ra,self.dec]))).T
-        if 'xpos' not in self.df.keys():
-            self.df['xpos'] = xy[0]
-            self.df['ypos'] = xy[1]
+    def get_xy_from_radec(self, update=True, overwrite=False):
+        """ computes the x and y position given the ziff wcs solution and the radec values. 
+        Store them as xpos and ypos in the current catalog if needed or requested.
+        
+        Parameters
+        ----------
+        update: [bool] -optional-
+            Shall the computed x and y position be stored in the current data as xpos and ypos columns ?
+            
+        overwrite: [bool] -optional-
+            Shall the update be made if the xpos and ypos columns already exist ?
+        
+        Returns
+        -------
+        xy
+        """
+        xy = np.stack(self.ziff.wcs[0].world_to_pixel_values(np.transpose([self.ra,self.dec]))).T
+        if update:
+            if 'xpos' not in self.data.keys() and overwrite:
+                self.data['xpos'] = xy[0]
+                self.data['ypos'] = xy[1]
+                
         return xy
-
     
-    def set_mask_pixels(self):
-        """ """
-        rsize = self.ziff.config['i/o']['stamp_size']/2
-        self.df['has_badpix'] = 0
-       
-        for (index, x, y) in zip(self.df.index, self.xpos,self.ypos) :
-            mask_ = self.ziff.mask[0].T[(x-rsize).astype(int): (x +rsize).astype(int), (y-rsize).astype(int): (y +rsize).astype(int)]
-            if mask_.any() == True:
-                self.df.loc[index, 'has_badpix'] = 1
+    def set_mask_pixels(self, mask=None):
+        """ set the column corresponding to the entry to be masked out. 0 kept, 1 removed.
+        Loaded from ziff if mask is None (self.load_ziffmask())
+        """
+        if mask is None:
+            self.load_ziffmask()
+        else:
+            self.data["has_badpix"] = mask
                 
     def get_xfit(self):
-        return self.xpos[self.df['filter'].values==1]
-
-    def get_key_fit(self, key):
-        if key in self.df.keys():
-            return self.df[key].values[self.df['filter'].values==1]
-        elif hasattr(self, key):
-            return getattr(self,key)[self.df['filter'].values==1]
-        raise ValueError('key {} not found'.format(key))
+        """ """        
+        # return self.xpos.query("filter in [1]")
+        return self.xpos[ self.filterflag ]
 
     def get_yfit(self):
-        return self.ypos[self.df['filter'].values==1]
+        return self.ypos[ self.filterflag ]
 
-    def get_skycoord(self, filtered = False):
-        if filtered:
-            return SkyCoord(self.ra.values[self.filtered_iindex],self.dec.values[self.filtered_iindex], unit = u.deg)
-        return SkyCoord(self.ra.values,self.dec.values, unit = u.deg)
+    def get_key_fit(self, key):
+        """ """
+        if key in self.data.keys():
+            return self.data[key].values[ self.filterflag ]
+        elif hasattr(self, key):
+            return getattr(self,key)[ self.filterflag ]
+        raise ValueError('key {} not found'.format(key))
+
+    def get_config(self):
+        """ returns the current configuration """
+        config = {}
+        config['name'] = self.name
+        config['filters'] = self._filters
+        return config
+
+    # -------- #
+    #  LOADER  #
+    # -------- #
+    def load_ziffmask(self):
+        """ """
+        rsize = self.ziff.config['i/o']['stamp_size']/2
+        self.data['has_badpix'] = 0
+       
+        for (index, x, y) in zip(self.data.index, self.xpos,self.ypos) :
+            mask_ = self.ziff.mask[0].T[(x-rsize).astype(int): (x +rsize).astype(int), (y-rsize).astype(int): (y +rsize).astype(int)]
+            if mask_.any() == True:
+                self.data.loc[index, 'has_badpix'] = 1
         
-
-    ############
+    #--------- #
     # MATCHING #
-    ############
+    #--------- #
     def match(self, catalog, seplimit = 1, filtered = True):
+        """ """
         skcatalog = catalog.get_skycoord(filtered = filtered)
         sk = self.get_skycoord(filtered = filtered)
 
@@ -162,54 +252,56 @@ class Catalog(object):
         return self_idx, catalog_idx
 
     def set_is_isolated(self):
+        """ """
         idx1,idx2 = self.match(self, seplimit = 8)
-        unique, counts = N.unique(idx1, return_counts=True)
-        self.df['is_isolated'] = 0
+        unique, counts = np.unique(idx1, return_counts=True)
+        self.data['is_isolated'] = 0
         wh = unique[counts == 1]
-        index = self.df.index[wh]
-        self.df.loc[index,'is_isolated'] = 1
+        index = self.data.index[wh]
+        self.data.loc[index,'is_isolated'] = 1
         
-    #############
+    #---------- #
     # FILTERING #
-    #############
-
+    #---------- #
+    def update_filter(self):
+        """ """
+        self.data.loc[:, 'filter'] = 1
+        for _filter in self._filters:
+            self.data.loc[:, 'filter'] *= self.data.loc[:,_filter]
+    
     def add_filter(self, key, range_values, name = None):
+        """ """
         if name is None:
             name = key + str(range_values)
-        self.df[name] = 0
-        if key in self.df.keys():
-            values = self.df[key]
+        self.data[name] = 0
+        if key in self.data.keys():
+            values = self.data[key]
         elif hasattr(self, key):
             values = getattr(self, key)
         else:
             raise ValueError("key {} not in keys or attributes ".format(key))
-        index = N.logical_and(values >= range_values[0],values < range_values[1])
-        self.df.loc[index,name] = 1
+        index = np.logical_and(values >= range_values[0],values < range_values[1])
+        self.data.loc[index,name] = 1
         self._filters[name] = {}
         self._filters[name]['range'] = range_values
         self._filters[name]['key'] = key
         self.update_filter()
 
     def remove_filter(self, name):
-        if name in self.df.keys():
-            self.df.drop(name, axis=1, inplace = True)
+        """ """
+        if name in self.data.keys():
+            self.data.drop(name, axis=1, inplace = True)
             self._filters.pop(name)
             self.update_filter()
         else:
             raise ValueError("Filter {} not found in dataframe.".format(name))
-        
-    def update_filter(self):
-        self.df.loc[:, 'filter'] = 1
-        for _filter in self._filters:
-            self.df.loc[:, 'filter'] *= self.df.loc[:,_filter]
-
-    #######
-    # I/O #
-    #######
-
+    
+    # -------- #
+    #   I/O    #
+    # -------- #
     def get_hdu(self, filtered = True):
         cols = []
-        df = self.df.reset_index()
+        df = self.data.reset_index()
         if filtered:
             df = df.loc[df['filter'] == 1]
         for _key in df.keys():
@@ -217,118 +309,153 @@ class Catalog(object):
                 format = 'K'
             else:
                 format = 'D'
-            cols.append(aio.fits.Column(name = _key, array = df[_key], format = format, ascii = False))
-        return aio.fits.BinTableHDU.from_columns(cols)
-
+            cols.append(fits.Column(name = _key, array = df[_key], format = format, ascii = False))
+        return fits.BinTableHDU.from_columns(cols)
 
     def get_primary_hdu(self):
         # Same as ztfcat
-        return aio.fits.open(self.ziff.ztfcat[0])[0]
+        return fits.open(self.ziff.ztfcat[0])[0]
     
     def save_fits(self,  suffix = None, path = None,filtered = True, overwrite = True):
         if path is None:
             path = self.ziff.prefix[0]+suffix
         if os.path.isfile(path):
-            print("WARNING: File {} already exists".format(path))
+            warnings.warn("WARNING: File {} already exists".format(path))
             if overwrite:
-                print("WARNING: Overwritting {}".format(path))
+                warnings.warn("WARNING: Overwritting {}".format(path))
                 os.remove(path)
-        hdul = aio.fits.HDUList([self.get_primary_hdu(),self.get_hdu(filtered=filtered)])
+                
+        hdul = fits.HDUList([self.get_primary_hdu(),self.get_hdu(filtered=filtered)])
         hdul.writeto(path)
         return
 
-    
     def load_fits(self, path):
-        f = aio.fits.open(path)
-        self.set_dataframe(pd.DataFrame(f[1].data).set_index('Source'))
+        """ """
+        print("load_fits DEPRECATED, use the class function")
+        f = fits.open(path)
+        self.set_data(pd.DataFrame(f[1].data).set_index('Source'))
 
-       
+    # ================ #
+    #   Properties     #
+    # ================ #
+    @property
+    def name(self):
+        """ Name of the catalog """
+        return self._name
 
-    def get_config(self):
-        config = {}
-        config['name'] = self.name
-        config['filters'] = self._filters
-        return config
-    
     @property
     def data(self):
-        return self.get_data()
-    
+        """ catalog data """
+        return self._data#get_data()
+        
+    def hasdata(self):
+        """ test if the data as been set."""
+        return hasattr(self, '_data')
+
     @property
     def dataframe(self):
-        return self._dataframe
+        """ """
+        print("self.dataframe is DEPRECATED, use self.data")
+        return self.data #self._dataframe
 
     @property
     def df(self):
         """ Shortcut for self.dataframe """
-        return self.dataframe
+        print("self.data is DEPRECATED, use self.data")
+        return self.data # self.dataframe
+
 
     @property
+    def filterflag(self):
+        """ boolean array corresponding to 
+        np.asarray(self.data['filter'], dtype="bool")
+        """
+        return np.asarray(self.data['filter'], dtype="bool")
+    @property
     def filtered_index(self):
-        return self.df.loc[self.df['filter']==1].index
+        """ dataframe index of the data filtered """
+        return self.data.loc[self.filterflag].index
 
     @property
     def filtered_iindex(self):
-        return N.where(self.df['filter']==1)[0]
+        return np.where( self.filterflag )[0]
     
     @property
     def xpos(self):
+        """ x ccd position, shortcut of self.get_xpos()"""
         return self.get_xpos()
 
     @property
     def ypos(self):
+        """ y ccd position, shortcut of self.get_ypos()"""        
         return self.get_ypos()
 
-    
     @property
     def ra(self):
+        """ ra coordinate, shortcut of self.get_ra()"""
         return self.get_ra()
 
     @property
     def dec(self):
+        """ declination coordinate, shortcut of self.get_dec()"""        
         return self.get_dec()
 
     @property
     def skycoord(self):
+        """ astropy SkyCoord of ra and dec """
         return SkyCoord(self.ra,self.dec, unit = u.deg)
     
     @property
     def ziff(self):
+        """ attached ziff object. """
         return self._ziff
 
-    @property
-    def name(self):
-        return self._name
+######################
+#                    #
+#  Derived Catalogs  #
+#                    #
+######################
 
-    
 class ReferenceCatalog(Catalog):
+    
     def __init__(self, ziff, name = None, which = 'GAIA'):
         if name is None:
             name =  which
         super().__init__(ziff = ziff, name = name)
+        
         if which in ['GAIA','gaia','Gaia']:
             self._which = 'gaia'
         elif which in ['PS','PS1','PanStarrs']:
             raise NotImplementedError('Please contact Melissa.')
         else:
             raise NotImplementedError("Only Gaia supported")
-        
 
+    # ------------ #
+    #  Download    #
+    # ------------ #
     def download(self, **kwargs):
-        # Sometimes there is an issue with the query, which leads to 0 entries and an index error. In thiscase we just retry.
+        """ Dowloads the catalog. """
+        # Sometimes there is an issue with the query, which leads to 0 entries and an index error. In this case we just retry once
+        retry = kwargs.get("retry", True)
+        
         if self._which == 'gaia':
-            fail = True
-            while fail==True:
-                try:
-                    df = self.fetch_gaia_catalog(**kwargs).to_pandas().set_index('Source')
-                    fail = False
-                except IndexError:
+            try:
+                df = self.fetch_gaia_catalog(**kwargs).to_pandas().set_index('Source')
+            except IndexError:
+                if retry:
                     print("Retrying to download gaia cats")
-                    pass
-            self.set_dataframe(df)
-
+                    self.download(**{**kwargs,**{"retry":False}})
+                else:
+                    warnings.warn("gaia catalog downloading failed")
+                    return
+        else:
+            raise NotImplementedError(" Only gaia catalog downloading has been implemented ")
+        
+        self.set_data(df)
+                
     
     def get_config(self):
+        """ returns the current configuration """
         config = super().get_config()
         config['which'] = self._which
         return config
@@ -370,6 +497,7 @@ class ReferenceCatalog(Catalog):
         angle = Angle(radius,r_unit)
         v = vizier.Vizier(columns, column_filters=column_filters)
         v.ROW_LIMIT = -1
+        # cache is False is necessary, notably when running in a computing center.
         t = v.query_region(coord, radius=angle,catalog="I/345/gaia2", cache=False).values()[0]
         t['colormag'] = t['RPmag'] - t['BPmag']
         return t
@@ -384,17 +512,6 @@ class BaselineCatalog(ReferenceCatalog):
         self.add_filter('xpos',[100,2900], name = 'border_filter_x')
         self.add_filter('ypos',[100,2900], name = 'border_filter_y')
         self.add_filter('is_isolated',[1,2], name = 'isolated_filter')
-        
-
-class ZTFCatalog(Catalog):
-    def __init__(self, ziff, name = 'ztfcat'):
-        super().__init__(ziff = ziff, name = name)
-        self.load_ZTF_catalog()
-        
-    def load_ZTF_catalog(self):
-        f = aio.fits.open(self.ziff.ztfcat[0])
-        self.set_dataframe(pd.DataFrame(f[1].data).set_index('sourceid'))
-        
     
     
 # End of catalog.py ========================================================
