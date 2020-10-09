@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/25 16:23:01 $
-# Modified on:       2020/10/09 10:38:12
+# Modified on:       2020/10/09 10:41:41
 # Copyright:         2019, Romain Graziani
 # $Id: download_query.py, 2020/09/25 16:23:01  RG $
 ################################################################################
@@ -41,7 +41,8 @@ from ztfquery import query
 m = marshal.MarshalAccess.load_local()
 zquery = query.ZTFQuery()
 zquery.load_metadata(kind = 'sci', **m.get_target_metadataquery(args.target))
-
+print(zquery.metatable)
+keys = ['sciimg.fits', 'mskimg.fits', 'psfcat.fits']
 for _key in keys:
     zquery.download_data(_key,show_progress=True, notebook=False, nprocess=args.nprocess, overwrite = bool(args.overwrite))
         
