@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/10/02 10:48:39 $
-# Modified on:       2020/10/06 15:31:30
+# Modified on:       2020/10/09 13:48:31
 # Copyright:         2019, Romain Graziani
 # $Id: stats.py, 2020/10/02 10:48:39  RG $
 ################################################################################
@@ -76,10 +76,10 @@ class BinnedStatistic(object):
 
     def get_group(self, groups):
         size = len(self._groupby_in)
+        if (not isinstance(groups,list)) and (not isinstance(groups,np.ndarray)):
+            groups = [groups]
         if size > 1:
-            groups = np.atleast_2d(groups)
             return pd.concat([self._groupby.get_group(tuple(g)) for g in groups])
-        groups = np.atleast_1d(groups)
         return pd.concat([self._groupby.get_group(g) for g in groups])
         
     def get_1d_bs(self, x_key, v_key, group = None, statistic = 'median', norm_key = None , norm_groupby = ['fracday','ccd'], norm_stat = 'median', nbins=None):
