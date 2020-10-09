@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/10/09 10:09:37
+# Modified on:       2020/10/09 11:14:48
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -408,6 +408,7 @@ class Ziff(object):
             for (i,s) in enumerate(stars):
                 for key in append_df_keys:
                     s._cat_kwargs[key] = df.iloc[i][key]
+                    s._cat_kwargs['name'] = df.iloc[i].name
         return stars
 
     def reflux_stars(self, stars, fit_center = False, use_minuit = False):
