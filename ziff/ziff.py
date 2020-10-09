@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/10/06 16:25:34
+# Modified on:       2020/10/09 10:09:37
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -559,14 +559,15 @@ class Ziff(object):
         """ """
         return [fits.open(msk)[0].data for msk in self._mskimg]
     
-    def set_mask(self):
+    def set_mask(self, **kwargs):
         """ """
-        mskdata = self.get_mask_data()
-        mbit = [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0]
-        flag = 0
-        for i in range(len(mbit)):
-            flag += mbit[i]*2**i
-        self._mask = [(md & flag) for md in mskdata]
+        #mskdata = self.get_mask_data()
+        #mbit = [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0]
+        #flag = 0
+        #for i in range(len(mbit)):
+        #    flag += mbit[i]*2**i
+        #self._mask = [(md & flag) for md in mskdata]
+        self._mask = [i.get_mask(**kwargs) for  i in self.get_ztfimg()]
 
     def get_galsimwcs(self):
         return [galsim.fitswcs.AstropyWCS(wcs=wcs) for wcs in self.wcs]
