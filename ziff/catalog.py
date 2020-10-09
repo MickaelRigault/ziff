@@ -189,7 +189,7 @@ class Catalog(object):
         """
         xy = np.stack(self.ziff.wcs[0].world_to_pixel_values(np.transpose([self.ra,self.dec]))).T
         if update:
-            if 'xpos' not in self.data.keys() and overwrite:
+            if 'xpos' not in self.data.keys() or overwrite:
                 self.data['xpos'] = xy[0]
                 self.data['ypos'] = xy[1]
                 
