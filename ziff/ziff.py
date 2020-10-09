@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/10/09 13:39:30
+# Modified on:       2020/10/09 16:04:16
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -469,7 +469,12 @@ class Ziff(object):
         dfs = {}
         for cat in self.catalog:
             c = self.process_catalog_name(cat)
-            dfs[cat] = pd.concat([c[i].data for i  in range(self.nimgs)])
+            df = []
+            for i in range(self.nimgs):
+                dfi = c[i].data
+                dfi = dfi.loc[dfi['filter'] == 1]
+                df.append(dfi)
+            dfs[cat] = pd.concat(df)
         return dfs
     
     def save_all_cats(self, overwrite= True):
