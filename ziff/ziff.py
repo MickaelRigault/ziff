@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/10/09 11:14:48
+# Modified on:       2020/10/09 13:39:30
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -110,6 +110,7 @@ class ZiffCollection( object ):
                 df['fracday'] = z.fracday[0]
                 df['quadrant'] = z.quadrants[0]
                 df['MAGZP'] = z.get_header()[0]['MAGZP']
+                df['filter'] = z.filter[0]
                 dfs.append(df)
             except FileNotFoundError:
                 print("ziff {} not found".format(i+1))
@@ -657,5 +658,11 @@ class Ziff(object):
     @property
     def fracday(self):
         return [int(p.split('/')[-2][1::]) for p in self.prefix]
+
+    @property
+    def filter(self):
+        return [p.split('_')[-5][1::] for p in self.prefix]
+
+    
 
 # End of ziff.py ========================================================
