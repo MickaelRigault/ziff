@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/10/05 10:31:24
+# Modified on:       2020/10/09 11:14:48
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -109,6 +109,7 @@ class ZiffCollection( object ):
                 df['ccd'] = z.ccd[0]
                 df['fracday'] = z.fracday[0]
                 df['quadrant'] = z.quadrants[0]
+                df['MAGZP'] = z.get_header()[0]['MAGZP']
                 dfs.append(df)
             except FileNotFoundError:
                 print("ziff {} not found".format(i+1))
@@ -407,6 +408,7 @@ class Ziff(object):
             for (i,s) in enumerate(stars):
                 for key in append_df_keys:
                     s._cat_kwargs[key] = df.iloc[i][key]
+                    s._cat_kwargs['name'] = df.iloc[i].name
         return stars
 
     def reflux_stars(self, stars, fit_center = False, use_minuit = False):
@@ -558,14 +560,15 @@ class Ziff(object):
         """ """
         return [fits.open(msk)[0].data for msk in self._mskimg]
     
-    def set_mask(self):
+    def set_mask(self, **kwargs):
         """ """
-        mskdata = self.get_mask_data()
-        mbit = [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0]
-        flag = 0
-        for i in range(len(mbit)):
-            flag += mbit[i]*2**i
-        self._mask = [(md & flag) for md in mskdata]
+        #mskdata = self.get_mask_data()
+        #mbit = [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0]
+        #flag = 0
+        #for i in range(len(mbit)):
+        #    flag += mbit[i]*2**i
+        #self._mask = [(md & flag) for md in mskdata]
+        self._mask = [i.get_mask(**kwargs) for  i in self.get_ztfimg()]
 
     def get_galsimwcs(self):
         return [galsim.fitswcs.AstropyWCS(wcs=wcs) for wcs in self.wcs]
