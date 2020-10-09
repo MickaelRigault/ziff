@@ -29,7 +29,7 @@ class Catalog(object):
         """ printing method """
         out = "{} object \n".format(self.__class__.__name__)
         out += "Name  : {}\n".format(self._name)
-        if hasattr(self, '_dataframe'):
+        if hasattr(self, '_data'):
             out += "Number of stars : {}".format(np.size(self.data.loc[self.filterflag],axis=0))
         return out
 
@@ -56,7 +56,7 @@ class Catalog(object):
             name = self._name
             
         c = self.__class__(self._ziff, name, **kwargs)
-        c._dataframe = self._dataframe.copy()
+        c._data = self._data.copy()
         c._filters = copy.deepcopy(self._filters)
         c.update_filter()
         return c
