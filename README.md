@@ -97,8 +97,8 @@ z.set_config_value('i/o,nstars', 10000)
 # Loading the catalog as Piff Stars object
 stars = z.make_stars('gaia_full', overwrite_cat=True)
 
-# Measuring flux and centroid of stars. Right now, you should put use_minuit = True if fit_center=True
-new_stars = z.reflux_stars(stars,fit_center=False, use_minuit=False)
+# Measuring flux and centroid of stars. Right now, you should put which = 'minuit' if fit_center=True
+new_stars = z.reflux_stars(stars,fit_center=False, which = 'piff')
 
 # Computing the residuals 
 residuals = z.compute_residuals(new_stars,normed=True,sky=200)
