@@ -174,7 +174,7 @@ Then to check the results, again:
 ```python
 z.set_config_value('i/o,nstars',10000)
 stars = z.make_stars('gaia_full',overwrite_cat=True)
-new_stars = z.reflux_stars(stars,fit_center=True, use_minuit=True)
+new_stars = z.reflux_stars(stars,fit_center=True, which = 'minuit')
 res = z.compute_residuals(new_stars,normed=True,sky=200)
 shapes = z.compute_shapes(new_stars)
 ```
@@ -206,7 +206,7 @@ z.eval_func('run_piff',catalog='gaia_calibration',overwrite_cat = True)
 #RESULTS
 z.eval_func('set_config_value',key_path = 'i/o,nstars',value=2000)
 stars = z.eval_func('make_stars',catalog='gaia_full')
-new_stars = z.eval_func_stars('reflux_stars',stars_list = stars, fit_center=False, use_minuit=False)
+new_stars = z.eval_func_stars('reflux_stars',stars_list = stars, fit_center=False, which = 'piff')
 res = z.eval_func_stars('compute_residuals',stars_list = new_stars)
 shapes = z.eval_func_stars('compute_shapes',stars)
 
