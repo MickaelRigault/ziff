@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/10/13 14:59:44
+# Modified on:       2020/10/13 15:24:04
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -498,11 +498,11 @@ class Ziff(object):
     # --------- #
     #  OTHER    #
     # --------- #
-    def read_shapes(self, as_df = True):
+    def read_shapes(self, as_df = True, save_suffix = 'shapes'):
         """ """
         # RESULT READER
         # - Should not be native here.
-        f = np.load(self.prefix[0]+'shapes.npz')
+        f = np.load(self.prefix[0]+'{}.npz'.format(save_suffix))
         if as_df:
             return pd.DataFrame.from_dict(dict(f))
         return f
@@ -551,7 +551,7 @@ class Ziff(object):
                 out[k].append(s._cat_kwargs[k])
         return out
     
-    def compute_shapes(self, stars, save=False):
+    def compute_shapes(self, stars, save=False, save_suffix = 'shapes'):
         shapes = {'instru_flux': [], 'T_data': [], 'T_model': [],
                       'g1_data': [],'g2_data': [],'g1_model': [],
                       'g2_model': [],'u': [],'v': [],
@@ -580,7 +580,7 @@ class Ziff(object):
         # Adding cat_kwargs
         shapes = {**shapes, **self.get_stars_cat_kwargs(stars)}
         if save:
-            [np.savez(p + 'shapes',**shapes) for p in self.prefix]
+            [np.savez(p + save_suffix,**shapes) for p in self.prefix]
         return shapes
 
     def compute_residuals(self, stars, normed = True, sky = 100):
