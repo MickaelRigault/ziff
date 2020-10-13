@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/10/09 16:04:16
+# Modified on:       2020/10/13 10:28:29
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -34,6 +34,8 @@ import pkg_resources
 from .catalog import Catalog, ReferenceCatalog
 import logging
 import piff
+from piff.star import Star, StarData, StarFit
+
 import galsim
 import pandas as pd
 
@@ -412,12 +414,13 @@ class Ziff(object):
                     s._cat_kwargs['name'] = df.iloc[i].name
         return stars
 
-    def reflux_stars(self, stars, fit_center = False, use_minuit = False):
+    def reflux_stars(self, stars, fit_center = False, which = 'minuit'):
         """ measure the flux and centroid (if allowed) of the star give the PSF.
         
 
         Parameters
         ----------
+            which : either 'minuit' or 'piff'
             DOC
 
         Returns
@@ -428,22 +431,70 @@ class Ziff(object):
         wcs, pointing = self.get_wcspointing()
         new_stars = []
         for (i,s) in enumerate(stars):
-            print("Processing {}/{}".format(i+1,len(stars)))
+            print("Processing {}/{}".format(i+1,len(stars)),end=' ')
             s.image.wcs = wcs[s.chipnum]
             s.run_hsm()
             new_s = self.psf.model.initialize(s)
             new_s = self.psf.interpolateStar(new_s)
             new_s.fit.flux = s.run_hsm()[0]
             new_s.fit.center = (0,0)
-            if use_minuit:
-                new_s = self.psf.model.reflux_minuit(new_s, fit_center = fit_center)
+            if which == 'minuit':
+                new_s = self.reflux_minuit(new_s, fit_center = fit_center)
             else:
                 new_s = self.psf.model.reflux(new_s, fit_center = fit_center)
             new_s._cat_kwargs = s._cat_kwargs
             new_stars.append(new_s)
         self.psf.model._centered = False
         return new_stars
+
+
+    #REFLUIX MINUIT
     
+
+    def reflux_minuit(self, star, fit_center=True):
+        # Make sure input is properly normalized
+        self.psf.model.normalize(star)
+        # Calculate the current centroid of the model at the location of this star.
+        # We'll shift the star's position to try to zero this out.
+        delta_u = np.arange(-self.psf.model._origin[0], self.psf.model.size-self.psf.model._origin[0])
+        delta_v = np.arange(-self.psf.model._origin[1], self.psf.model.size-self.psf.model._origin[1])
+        u, v = np.meshgrid(delta_u, delta_v)
+        temp = star.fit.params.reshape(self.psf.model.size,self.psf.model.size)
+        params_cenu = np.sum(u*temp)/np.sum(temp)
+        params_cenv = np.sum(v*temp)/np.sum(temp)
+        data, weight, u, v = star.data.getDataVector()
+        dof = np.count_nonzero(weight)
+        
+        def chi2(center_x,center_y, flux):
+            data, weight, u, v = star.data.getDataVector()
+            center = (center_x,center_y)
+            scaled_flux = flux * star.data.pixel_area
+            up = u-center[0]
+            vp = v-center[1]
+            coeffs, psfx, psfy, _,_ = self.psf.model.interp_calculate(up/self.psf.model.scale, vp/self.psf.model.scale, True)
+            index1d = self.psf.model._indexFromPsfxy(psfx, psfy)
+            nopsf = index1d < 0
+            alt_index1d = np.where(nopsf, 0, index1d)
+            coeffs = np.where(nopsf, 0., coeffs)
+            pvals = star.fit.params[alt_index1d]
+            mod = np.sum(coeffs*pvals, axis=1)
+            resid = data - mod*scaled_flux
+            chisq = np.sum(resid**2 * weight)
+            return chisq
+        
+        from iminuit import Minuit
+        m = Minuit(chi2,center_x = 0, center_y = 0, limit_center_x = (-3,3), limit_center_y = (-3,3), flux=1000,limit_flux = (1,None), fix_center_x = not fit_center, fix_center_y = not fit_center, print_level = 0,error_flux = 1, error_center_x = 0.01, error_center_y = 0.01, errordef = 1)
+        _ = m.migrad()  # run optimiser
+        #print(m.values)
+        
+        return Star(star.data, StarFit(star.fit.params,
+                                       flux = m.values['flux'],
+                                       center = (m.values['center_x'],m.values['center_y']),
+                                       params_var = star.fit.params_var,
+                                       chisq = 0,
+                                       dof = dof,
+                                       A = star.fit.A,
+                                       b = star.fit.b))
     # --------- #
     #  OTHER    #
     # --------- #
@@ -568,16 +619,7 @@ class Ziff(object):
     
     def set_mask(self, **kwargs):
         """ """
-        #mskdata = self.get_mask_data()
-        #mbit = [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0]
-        #flag = 0
-        #for i in range(len(mbit)):
-        #    flag += mbit[i]*2**i
-        #self._mask = [(md & flag) for md in mskdata]
         self._mask = [i.get_mask(**kwargs) for  i in self.get_ztfimg()]
-
-    def get_galsimwcs(self):
-        return [galsim.fitswcs.AstropyWCS(wcs=wcs) for wcs in self.wcs]
         
     def get_wcspointing(self):
         inputfile = self.get_piff_inputfile()
@@ -586,10 +628,7 @@ class Ziff(object):
         return wcs,inputfile.getPointing()
 
     def get_piff_inputfile(self):
-        inputfile = piff.InputFiles(self.config['i/o'])
-        wcs = self.get_galsimwcs()
-        #inputfile.setWCS(config = {'wcs':self.get_galsimwcs()},logger=self.logger)
-        inputfile.new_setWCS(wcs = self.get_galsimwcs(),logger=self.logger)
+        inputfile = piff.InputFiles(self.config['i/o'], logger=self.logger)
         inputfile.setPointing('RA','DEC')
         return inputfile
     
