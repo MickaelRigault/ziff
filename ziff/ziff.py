@@ -6,7 +6,7 @@
 # Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
 # Author:            $Author: rgraziani $
 # Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/10/13 10:28:29
+# Modified on:       2020/10/13 14:59:44
 # Copyright:         2019, Romain Graziani
 # $Id: ziff.py, 2020/09/21 10:40:18  RG $
 ################################################################################
@@ -226,10 +226,10 @@ class Ziff(object):
             print("Catalogs not found")
             self.build_default_catalog()
 
-    def load_psf(self, path = None):
+    def load_psf(self, path = None, save_suffix = 'output.piff'):
         """ Load an existing 'psf.piff' file. """
         if path is None:
-            path = self.prefix[0] + 'output.piff'
+            path = self.prefix[0] + save_suffix
         self._psf = piff.PSF.read(file_name=path,logger=self.logger)
 
     # -------- #
@@ -360,7 +360,7 @@ class Ziff(object):
     # --------- #
     #  PIFF     #
     # --------- #
-    def run_piff(self, catalog, prefix = None, overwrite_cat = False, overwrite_piff = True):
+    def run_piff(self, catalog, prefix = None, overwrite_cat = False, save_suffix = 'output.piff'):
         """ run the piff PSF algorithm on the given images using the given reference catalog (star location) 
         
         Parameters
@@ -386,7 +386,7 @@ class Ziff(object):
 
         psf = piff.SimplePSF.process(self.config['psf'])
         psf.fit(stars, wcs, pointing, logger=self.logger)
-        [psf.write(p + 'output.piff') for p in self.prefix]
+        [psf.write(p + save_suffix) for p in self.prefix]
         self._psf = psf
         [self.save_config(p + 'piff_config.json') for p in self.prefix]
 
