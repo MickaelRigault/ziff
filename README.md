@@ -10,10 +10,10 @@ R. Graziani (r.graziani@clermont.in2p3.fr, CNRS/IN2P3), M. Rigault (m.rigault@ip
 
 # Installation
 
-You first need Piff compatible with ZTF:
+You first need Piff:
 ```bash
-git clone https://github.com/rgraz/PIFFZTF.git
-cd PIFFZTF
+git clone https://github.com/rmjarvis/Piff.git
+cd Piff
 python setup.py install
 ```
 
@@ -34,10 +34,20 @@ conda update -c conda-forge treecorr
 
 #### GalSim
 
-See [GalSim](https://github.com/GalSim-developers/GalSim)
+See [GalSim](https://github.com/GalSim-developers/GalSim).
+It seems to be an issue with conda installation, but try :
 ```
 conda install -c conda-forge galsim
 ```
+Safe way :
+```
+git clone https://github.com/GalSim-developers/GalSim.git
+cd GalSim
+git checkout main
+git pull
+python setup.py install
+```
+
 
 And ztfquery, ztfimg  (available @ https://github.com/MickaelRigault)
 
