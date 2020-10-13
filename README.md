@@ -35,9 +35,18 @@ conda update -c conda-forge treecorr
 #### GalSim
 
 See [GalSim](https://github.com/GalSim-developers/GalSim)
+It seems to be an issue with conda installation, but try :
 ```
 conda install -c conda-forge galsim
 ```
+Safe way :
+```
+git clone https://github.com/GalSim-developers/GalSim.git
+git checkout main
+git pull
+python setup.py install
+```
+
 
 And ztfquery, ztfimg  (available @ https://github.com/MickaelRigault)
 
