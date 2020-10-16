@@ -25,6 +25,10 @@ __author__ = 'Romain Graziani <romain.graziani@clermont.in2p3.fr>'
 __date__ = '2020/09/25 16:23:01'
 __adv__ = 'download_query.py'
 
+
+print("ziff download_query is deprecated. Use 'irsa_query.py' instead.")
+
+
 import argparse
 
 parser = argparse.ArgumentParser()

@@ -27,6 +27,9 @@ __adv__ = 'download_query.py'
 
 import argparse
 
+print("ziff download_target is deprecated. Use 'irsa_query.py --target' instead.")
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--target",type=str,default = "ZTF19aanbojt")
 parser.add_argument("--overwrite",type=int,default = 1)
