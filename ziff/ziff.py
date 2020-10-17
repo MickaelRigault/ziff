@@ -48,86 +48,9 @@ collection_functions = [
     'compute_residuals'
 ]
 
-class ZiffCollection( object ):
-    
-    def __init__(self, sciimg_list, mskimg_list = None, logger = None, **kwargs):
-        """ 
-        
-        Parameters
-        ----------
-        sciimg_list, mskimg_list: [strings or list of] -optional-
-            Path (or list of) to the ztf science image (sciimg.fits) and their corresponding mask images (mskimg.fits)
-
-        logger: [logger or None] -optional-
-            logger passed to piff.
-
-        **kwargs goes to Ziff
-        """
-        if mskimg_list is None:
-            mskimg_list = [None] * len(sciimg_list)
-            
-        self.ziffs = [Ziff(s,m,logger,**kwargs) for (s,m) in zip(np.atleast_1d(sciimg_list), np.atleast_1d(mskimg_list))]
-    
-    @classmethod
-    def from_zquery(cls, zquery,  groupby = ['ccdid','fracday','fid'], **kwargs):
-        """ """
-        mt = zquery.get_local_metatable(which='dl')
-        mt.index = np.arange(np.size(mt,axis=0))
-        groupby = mt.groupby(groupby)
-        groups = groupby.groups
-        local_data_sciimg = np.asarray(zquery.get_local_data("sciimg.fits", filecheck = False))
-        sciimg_list = [local_data_sciimg[groupby.get_group(i).index.values] for i in groups]
-        local_data_mskimg = np.asarray(zquery.get_local_data("mskimg.fits", filecheck = False))
-        mskimg_list = [local_data_mskimg[groupby.get_group(i).index.values] for i in groups]
-        return cls(sciimg_list, mskimg_list, **kwargs) #cls(name, date.today().year - year)
-
-    def to_file(self, filename):
-        with open(filename,'w') as f:
-            for ziff in self.ziffs:
-                for (i,l0) in enumerate(ziff._sciimg):
-                    if i ==0 :
-                        f.write(l0)
-                    else:
-                        f.write(',' + l0)
-                f.write('\n')
-                
-    @classmethod
-    def from_file(cls, filename,max_rows=None, **kwargs):
-        list_img = []
-        with open(filename,'r') as f: 
-            lines = f.readlines()
-            if max_rows is None:
-                max_rows = len(lines)
-            for line in lines[0:max_rows]: 
-                list_img.append(line[0:-1].split(',')) 
-        return cls(list_img, **kwargs)
-
-    def read_shapes(self):
-        dfs = []
-        for (i,z) in enumerate(self.ziffs):
-            print('{}/{}'.format(i+1,len(self.ziffs)))
-            try:
-                df = z.read_shapes()
-                df['ccd'] = z.ccd[0]
-                df['fracday'] = z.fracday[0]
-                df['quadrant'] = z.quadrants[0]
-                df['MAGZP'] = z.get_header()[0]['MAGZP']
-                df['filter'] = z.filter[0]
-                dfs.append(df)
-            except FileNotFoundError:
-                print("ziff {} not found".format(i+1))
-        return pd.concat(dfs)
-    
-
-    def eval_func(self, attr, parallel = False, **kwargs):
-        return [getattr(z,attr)(**kwargs) for z in self.ziffs]
-
-    def eval_func_stars(self,attr, stars_list, parallel = False, **kwargs):
-        return [getattr(z,attr)(stars = stars_list[i],**kwargs) for (i,z) in enumerate(self.ziffs)]
-
 ######################
 #                    #
-#     Catalog        #
+#  Ziff Class        #
 #                    #
 ######################
 
@@ -171,7 +94,7 @@ class Ziff(object):
         if check_exist:
             for s in sciimg:
                 if not os.path.exists(s):
-                    raise FileNotFoundError("{} does not exist.".format(s))
+                    raise FileNotFoundError(f"{s} does not exist.")
                 
         self._sciimg = sciimg
         self.set_mskimg(mskimg)
@@ -317,9 +240,9 @@ class Ziff(object):
         """ update the configuration values """
         # Should be cleaned but it works
         kp = key_path.split(sep)
-        to_eval = 'config' + ''.join(["['{}']".format(k) for k in kp]) + ' = {}'.format(value)
+        to_eval = 'config' + ''.join([f"['{k}']" for k in kp]) + f" = {value}"
         if isinstance(value, str):
-            to_eval = 'config' + ''.join(["['{}']".format(k) for k in kp]) + " = '{}'".format(value)
+            to_eval = 'config' + ''.join([f"['{k}']" for k in kp]) + f" = '{value}'"
         exec(to_eval,{'config':self.config})
 
     def set_default_config(self):
@@ -431,7 +354,7 @@ class Ziff(object):
         wcs, pointing = self.get_wcspointing()
         new_stars = []
         for (i,s) in enumerate(stars):
-            print("Processing {}/{}".format(i+1,len(stars)),end=' ')
+            print(f"Processing {i+1}/{len(stars)}",end=' ')
             s.image.wcs = wcs[s.chipnum]
             s.run_hsm()
             new_s = self.psf.model.initialize(s)
@@ -502,7 +425,7 @@ class Ziff(object):
         """ """
         # RESULT READER
         # - Should not be native here.
-        f = np.load(self.prefix[0]+'{}.npz'.format(save_suffix))
+        f = np.load(self.prefix[0]+f'{save_suffix}.npz')
         if as_df:
             return pd.DataFrame.from_dict(dict(f))
         return f
@@ -666,18 +589,21 @@ class Ziff(object):
 
     @property 
     def shape(self):
+        """ Image shape """
         return (3080, 3072)
     
     @property
     def ra(self):
         if not hasattr(self, '_ra'):
-            self._ra = [wcs.pixel_to_world_values(*np.asarray([header['NAXIS1'], header['NAXIS2']])/2 + 0.5)[0] for (wcs,header) in zip(self.wcs,self.get_header())]
+            self._ra = [wcs.pixel_to_world_values(*np.asarray([header['NAXIS1'], header['NAXIS2']])/2 + 0.5)[0]
+                            for (wcs,header) in zip(self.wcs,self.get_header())]
         return self._ra
     
     @property
     def dec(self):
         if not hasattr(self, '_dec'):
-            self._dec = [wcs.pixel_to_world_values(*np.asarray([header['NAXIS1'], header['NAXIS2']])/2 + 0.5)[1] for (wcs,header) in zip(self.wcs,self.get_header())]
+            self._dec = [wcs.pixel_to_world_values(*np.asarray([header['NAXIS1'], header['NAXIS2']])/2 + 0.5)[1]
+                             for (wcs,header) in zip(self.wcs,self.get_header())]
         return self._dec
 
     @property
@@ -708,5 +634,87 @@ class Ziff(object):
         return [p.split('_')[-5][1::] for p in self.prefix]
 
     
+######################
+#                    #
+#  Ziff Collection   #
+#                    #
+######################
+
+class ZiffCollection( object ):
+    
+    def __init__(self, sciimg_list, mskimg_list = None, logger = None, **kwargs):
+        """ 
+        
+        Parameters
+        ----------
+        sciimg_list, mskimg_list: [strings or list of] -optional-
+            Path (or list of) to the ztf science image (sciimg.fits) and their corresponding mask images (mskimg.fits)
+
+        logger: [logger or None] -optional-
+            logger passed to piff.
+
+        **kwargs goes to Ziff
+        """
+        if mskimg_list is None:
+            mskimg_list = [None] * len(sciimg_list)
+            
+        self.ziffs = [Ziff(s,m,logger,**kwargs) for (s,m) in zip(np.atleast_1d(sciimg_list), np.atleast_1d(mskimg_list))]
+    
+    @classmethod
+    def from_zquery(cls, zquery,  groupby = ['ccdid','fracday','fid'], **kwargs):
+        """ """
+        mt = zquery.get_local_metatable(which='dl')
+        mt.index = np.arange(np.size(mt,axis=0))
+        groupby = mt.groupby(groupby)
+        groups = groupby.groups
+        local_data_sciimg = np.asarray(zquery.get_local_data("sciimg.fits", filecheck = False))
+        sciimg_list = [local_data_sciimg[groupby.get_group(i).index.values] for i in groups]
+        local_data_mskimg = np.asarray(zquery.get_local_data("mskimg.fits", filecheck = False))
+        mskimg_list = [local_data_mskimg[groupby.get_group(i).index.values] for i in groups]
+        return cls(sciimg_list, mskimg_list, **kwargs) #cls(name, date.today().year - year)
+
+    def to_file(self, filename):
+        with open(filename,'w') as f:
+            for ziff in self.ziffs:
+                for (i,l0) in enumerate(ziff._sciimg):
+                    if i ==0 :
+                        f.write(l0)
+                    else:
+                        f.write(',' + l0)
+                f.write('\n')
+                
+    @classmethod
+    def from_file(cls, filename,max_rows=None, **kwargs):
+        list_img = []
+        with open(filename,'r') as f: 
+            lines = f.readlines()
+            if max_rows is None:
+                max_rows = len(lines)
+            for line in lines[0:max_rows]: 
+                list_img.append(line[0:-1].split(',')) 
+        return cls(list_img, **kwargs)
+
+    def read_shapes(self):
+        dfs = []
+        for (i,z) in enumerate(self.ziffs):
+            print('{i+1}/{len(self.ziffs)}')
+            try:
+                df = z.read_shapes()
+                df['ccd'] = z.ccd[0]
+                df['fracday'] = z.fracday[0]
+                df['quadrant'] = z.quadrants[0]
+                df['MAGZP'] = z.get_header()[0]['MAGZP']
+                df['filter'] = z.filter[0]
+                dfs.append(df)
+            except FileNotFoundError:
+                print(f"ziff {i+1} not found")
+        return pd.concat(dfs)
+    
+
+    def eval_func(self, attr, parallel = False, **kwargs):
+        return [getattr(z,attr)(**kwargs) for z in self.ziffs]
+
+    def eval_func_stars(self,attr, stars_list, parallel = False, **kwargs):
+        return [getattr(z,attr)(stars = stars_list[i],**kwargs) for (i,z) in enumerate(self.ziffs)]
 
 # End of ziff.py ========================================================
