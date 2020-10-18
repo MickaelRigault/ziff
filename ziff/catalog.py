@@ -299,36 +299,84 @@ class Catalog(object):
     # -------- #
     #   I/O    #
     # -------- #
-    def get_hdu(self, filtered = True):
+    def get_datahdu(self, filtered = True):
         cols = []
         df = self.data.reset_index()
         if filtered:
-            df = df.loc[df['filter'] == 1]
+            df = df.loc[self.filterflag]
+            
         for _key in df.keys():
-            if df[_key].dtype == 'int':
-                format = 'K'
-            else:
-                format = 'D'
+            format = 'K' if df[_key].dtype == 'int' else 'D'
             cols.append(fits.Column(name = _key, array = df[_key], format = format, ascii = False))
+            
         return fits.BinTableHDU.from_columns(cols)
 
     def get_primary_hdu(self):
         # Same as ztfcat
+        print("DEPRECATED")
         return fits.open(self.ziff.ztfcat[0])[0]
-    
-    def save_fits(self,  suffix = None, path = None,filtered = True, overwrite = True):
-        if path is None:
-            path = self.ziff.prefix[0]+suffix
-        if os.path.isfile(path):
-            warnings.warn("WARNING: File {} already exists".format(path))
-            if overwrite:
-                warnings.warn("WARNING: Overwritting {}".format(path))
-                os.remove(path)
-                
-        hdul = fits.HDUList([self.get_primary_hdu(),self.get_hdu(filtered=filtered)])
-        hdul.writeto(path)
-        return
 
+    
+    def save_fits(self, savefile, filtered=True, overwrite=True, **kwargs):
+        """ """
+        print("DEPRECATED, used writeto")
+        self.writeto(savefile, filtered=filtered, overwrite=overwrite, **kwargs)
+
+        
+    def write_to(self, savefile, filtered=True, format=None, overwrite=True, safeexit=False, header=None):
+        """ generic saving function calling the dedicated format ones (to_fits, to_csv)"""
+        if os.path.isfile(savefile):
+            warnings.warn(f"File {savefile} already exists")
+            if not overwrite:
+                if safeexit:
+                    return None
+                raise IOError("Cannot overwrite existing file.")
+        
+        if format is None:
+            format = os.path.splitext(savefile)[-1]
+            if format is None:
+                raise ValueError("No extension given in savefile and format=None.")
+        else:
+            if format.startswith("."):
+                savefile = savefile+format
+            else:
+                savefile = savefile+"."+format
+
+        # - 
+        if format in ["fits",".fits"]:
+            self.to_fits(savefile, filtered=filtered, overwrite=overwrite, header=header)
+        else:
+            raise ValueError("Only fits format implemented")
+
+    def to_fits(self, savefile, header=None, filtered=True, overwrite=False):
+        """ Store the catalog as a fits file. 
+        
+        Parameters
+        ----------
+        
+        
+        Returns
+        -------
+        exit of fits.HDUList.writeto()
+        """
+        hdul = []
+        # -- Data saving
+        if header is None:
+            header = fits.Header()
+        elif type(header) is dict:
+            header = fits.Header(header)
+        elif type(header) is not fits.Header:
+            raise TypeError(f"input header must be a dict or a fits.Header, {type(header)} given.")
+        
+        # - Primary
+        hdul.append(fits.PrimaryHDU([], header))
+        # - Data
+        hdul.append(self.get_datahdu(filtered=filtered))
+        # -> out
+        hdul = fits.HDUList(hdul)
+        return hdul.writeto(savefile, overwrite=overwrite)
+        
+        
     def load_fits(self, path):
         """ """
         print("load_fits DEPRECATED, use the class function")
@@ -515,3 +563,5 @@ class BaselineCatalog(ReferenceCatalog):
     
     
 # End of catalog.py ========================================================
+
+#  LocalWords:  toprimary

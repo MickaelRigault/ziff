@@ -98,14 +98,14 @@ class Ziff(object):
                 
         self._sciimg = sciimg
         self.set_mskimg(mskimg)
-        self.load_default_config()
         self.set_logger(logger)
         self._catalog = {}
+        self.load_default_config()
+        
         if load_default_cat:
             self.load_default_catalog()
-        else:
-            if build_default_cat:
-                self.build_default_catalog(save_cat = save_cat)
+        elif build_default_cat:
+            self.build_default_catalog(save_cat = save_cat)
 
     @classmethod
     def from_file(cls, filename, row=0, **kwargs):
@@ -354,7 +354,7 @@ class Ziff(object):
         wcs, pointing = self.get_wcspointing()
         new_stars = []
         for (i,s) in enumerate(stars):
-            print(f"Processing {i+1}/{len(stars)}",end=' ')
+            print(f"Processing {i+1}/{len(stars)}")
             s.image.wcs = wcs[s.chipnum]
             s.run_hsm()
             new_s = self.psf.model.initialize(s)
@@ -458,7 +458,7 @@ class Ziff(object):
             
     def save_catalog(self, cat, prefix, overwrite):
         for (c,p) in zip(cat,prefix):
-            c.save_fits(path = p + c.name + '.fits', overwrite = overwrite, filtered=True)
+            c.write_to(p + c.name + '.fits', overwrite = overwrite, filtered=True)
             
     def save_config(self, path):
         with open(path, 'w') as f:
