@@ -1,17 +1,110 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import numpy as np
-import pandas as pd
-import warnings
-from astropy.io import fits #as aio
-import astropy.units as u
 import os
-from astropy.coordinates import Angle, SkyCoord, search_around_sky
-from astropy.wcs import WCS
 import copy
+import warnings
 
 
+import pandas
+import numpy as np
+
+
+from astropy import units
+from astropy.io import fits #as aio
+from astropy.coordinates import Angle, SkyCoord, search_around_sky
+
+
+def fetch_ziff_catalog(ziff, which="gaia", as_collection=True,**kwargs):
+    """ High level function that fetch the `which` catalog data for the given ziff.
+    returns a CatalogCollection if allowed if the ziff is not a single ziff. 
+    
+    **kwargs goes to fetch_{which}_catalog
+
+    Returns
+    -------
+    Catalog or CatalogCollection
+    """
+    if ziff.is_single():
+        ra,dec = ziff.get_center(inpixel=False)
+        radius = ziff.get_diagonal(inpixel=False)/1.7 # Not 2 to have some wiggle room
+        return fetch_catalog(which, ra, dec, radius, r_unit="deg", **kwargs)
+    else:
+        coords = ziff.get_center(inpixel=False)
+        radii  = np.asarray(ziff.get_diagonal(inpixel=False))/1.7
+        cats = []
+        for (ra_,dec_), radius_ in zip(coords, radii):
+            cats.append( fetch_catalog(which, ra_, dec_, radius_, r_unit="deg", **kwargs) )
+
+    if as_collection:
+         return CatalogCollection(cats, load_data=True)
+    return cats
+
+def fetch_catalog(which, ra, dec, radius, r_unit="deg", **kwargs):
+    """ """
+    return eval(f"fetch_{which}_catalog")(ra, dec, radius, r_unit=r_unit, **kwargs)
+
+def fetch_gaia_catalog(ra, dec, radius= 0.75, r_unit="deg",column_filters={'Gmag': '10..20'},
+                        as_catalog=True, name="gaia",
+                        **kwargs):
+    """ query online gaia-catalog in Vizier (I/345, DR2) using astroquery.
+    This function requieres an internet connection.
+        
+    Parameters
+    ----------
+    ra, dec: [float]
+        center of the Catalog [in degree]
+
+    center: [string] 'ra dec'
+    position of the center of the catalog to query.
+    (we use the radec of center of the quadrant)
+        
+    radius: [string] 'value unit'
+    radius of the region to query. For instance '1d' means a
+    1 degree raduis
+    (from the center of the quadrant to the border it is about 0.65 deg)
+
+    extracolumns: [list-of-string] -optional-
+    Add extra column from the V/139 catalog that will be added to
+    the basic query (default: position, ID, object-type, magnitudes)
+    column_filters: [dict] -optional-
+    Selection criterium for the queried catalog.
+    (we have chosen G badn, it coers from 300 to 1000 nm in wavelength)
+
+    **kwargs goes to Catalog.__init__
+
+    Returns
+    -------
+    GAIA Catalog (child of Catalog)
+    """
+    from astroquery import vizier
+    columns = ["Source","RA_ICRS","e_RA_ICRS","DE_ICRS","e_ED_ICRS", "Gmag", "RPmag", "BPmag"]
+    
+    coord = SkyCoord(ra=ra,dec=dec, unit=(units.deg,units.deg))
+    angle = Angle(radius, r_unit)
+    v = vizier.Vizier(columns, column_filters=column_filters)
+    v.ROW_LIMIT = -1
+    # cache is False is necessary, notably when running in a computing center.
+    gaiatable = v.query_region(coord, radius=angle,catalog="I/345/gaia2", cache=False).values()[0]
+    gaiatable['colormag'] = gaiatable['RPmag'] - gaiatable['BPmag']
+    if not as_catalog:
+        return gaiatable
+    
+    df = gaiatable.to_pandas().set_index('Source')
+    return Catalog(dataframe=df, name=name, **kwargs)
+
+
+def dataframe_to_hdu(dataframe):
+    """ converts a dataframe into a fits.BinTableHDU """
+    cols = []
+    df = dataframe.reset_index()            
+    for _key in df.keys():
+        format = 'K' if df[_key].dtype == 'int' else 'D'
+        cols.append(fits.Column(name = _key, array = df[_key], format = format, ascii = False))
+            
+    return fits.BinTableHDU.from_columns(cols)
+
+    
 ######################
 #                    #
 #     Catalog        #
@@ -19,334 +112,128 @@ import copy
 ######################
 class Catalog(object):
     
-    def __init__(self, ziff, name):
+    def __init__(self, dataframe=None, name=None, wcs=None, header=None, mask=None):
         """ """
         self._name = name
-        self._ziff = ziff
         self._filters = {}
+        
+        if dataframe is not None:
+            self.set_data( dataframe )
 
+        if wcs is not None:
+            self.set_wcs(wcs)
+
+        if header is not None:
+            self.set_header(header)
+
+        if mask is not None:
+            self.set_mask(mask)
+        
     def __str__(self):
         """ printing method """
         out = "{} object \n".format(self.__class__.__name__)
         out += "Name  : {}\n".format(self._name)
         if hasattr(self, '_data'):
-            out += "Number of stars : {}".format(np.size(self.data.loc[self.filterflag],axis=0))
+            out += "Number of stars : {}".format(np.size(self.data.loc[~self.filterout],axis=0))
         return out
 
-    @classmethod
-    def load(cls, filename, extension=None, name="catalog", ziff=None):
-        """ """
-        data = fits.getdata(filename, ext=extension)
-        this = cls(ziff, name)
-        this.set_data(pd.DataFrame(data).set_index('Source'))
-        return this
-
-    @classmethod
-    def load_from_ziffztfcat(cls, ziff, name="ztfcat"):
-        """ loads from ziff.ztfcat[0] """
-        this = cls(ziff, name)
-        f = fits.open( this.ziff.ztfcat[0] )
-        this.set_data(pd.DataFrame(f[1].data).set_index('sourceid'))
-        return this
-
-    
     def copy(self, name = None, **kwargs):
         """ """        
         if name is None:
             name = self._name
             
-        c = self.__class__(self._ziff, name, **kwargs)
-        c._data = self._data.copy()
+        c = self.__class__(dataframe=self._data.copy(), name=name, **kwargs)
         c._filters = copy.deepcopy(self._filters)
         c.update_filter()
         return c
-        
-    # ================ #
-    #   Methods        #
-    # ================ #
-    def change_name(self, new_name):
-        """ change the name on the current catalog. """        
-        self._name = new_name
-
-    # -------- #
-    #  SETTER  #
-    # -------- #
-    def set_data(self, dataframe):
-        """ Set the current dataframe as catalog data. """
-        if type(dataframe) != pd.DataFrame:
-            try:
-                dataframe = pd.DataFrame(dataframe)
-            except:
-                raise TypeError("The input dataframe is not a DataFrame and cannot be converted into one.")
-            
-        self._data = dataframe
-        for k in dataframe.keys():
-            self._data[k] = self._data[k].values.byteswap().newbyteorder()
-            
-        self._data['filter'] = 1
-
-    def set_dataframe(self, dataframe):
-        # I WOULD REMOVE AND CALL SET_DATAFRAME -> SET_DATA
-        print("DEPRECATED self.set_dataframe is deprecated use self.set_data(dataframe)")
-        return self.set_data(dataframe)
     
-    # - Extra Info
-    def set_sky(self, sky=None):
-        """ Set the sky (background) column.
+    # ----- #
+    #  I/O  #
+    # ----- #
+    @classmethod
+    def load(cls, filename, name=None, wcs=None, header=None, mask=None, multi_ok=True, **kwargs):
+        """ Generic loading method.
         
+
         Parameters
         ----------
-        sky: [array or None]
-            values corresponding to the sky background. It will be added to the curret data as 'sky' column.
-            If None, the ziff backgroud will be used.
+        
         """
-        if sky is None:
-            bkgd = self.ziff.get_ztfimg()[0].get_background()
-            self.data['sky'] = bkgd[np.clip(self.ypos,0,self.ziff.shape[0]-1).astype(int),np.clip(self.xpos,0,self.ziff.shape[1]-1).astype(int)]
-        else:
-            self.data['sky'] = sky
+        filename = np.atleast_1d(filename)
+        if len(filename)>1:
+            if not multi_ok:
+                raise ValueError("Only single filename could be used to set a catalog. use MultiCatalog.load or set multi_ok=True for having this automated")
+            return MultiCatalog.load(filename, name=name, wcs=wcs,
+                                     header=header, mask=mask, **kwargs)
+
+        filename = filename[0]
+        extension = filename.split(".")[-1]
+        if extension in ["csv"]:
+            return cls.read_cvs(read_cvs, name=name, wcs=wcs, header=header, mask=mask, **kwargs)
+        
+        if extension in ["fits"]:
+            return cls.read_fits(read_cvs, name=name, wcs=wcs, header=header, mask=mask, **kwargs)
+
+        raise ValueError("only csv and fits loading implemented.")
             
-    # -------- #
-    #  GETTER  #
-    # -------- #
-    def get_data(self, filtered=False):
-        """
-        return_type = [df, astropy]
-        """
-        if not self.hasdata():
-            raise AttributeError("No data set yet. Use self.set_data()")
+    @classmethod
+    def read_cvs(cls, filename, name="catalog", index_col=None, readprop={}, **kwargs):
+        """ """
+        return cls( dataframe=pandas.read_csv(filename, index_col=index_col, **readprop),
+                        name=name, **kwargs)
 
-        return self.data[self.filterflag] if filtered else self.data
-        
-
-    #  RA/Dec
-    def get_skycoord(self, filtered = False):
-        if filtered:
-            return SkyCoord(self.ra.values[self.filtered_iindex],self.dec.values[self.filtered_iindex], unit = u.deg)
-        return SkyCoord(self.ra.values,self.dec.values, unit = u.deg)
-    
-    def get_ra(self):
-        """ Get the Right ascension column """
-        keys = ['RA_ICRS','RA','ra']
-        for k in keys:
-            try:
-                return self.data[k]
-            except:
-                pass
-        raise ValueError("Keys {} not in dataframe".format(keys))
-    
-    def get_dec(self):
-        """ Get the Declination ascension column """
-        keys = ['DE_ICRS','DE','de','DEC','dec']
-        for k in keys:
-            try:
-                return self.data[k]
-            except:
-                pass
-        raise ValueError("Keys {} not in dataframe".format(keys))
-
-    #  CCD Position (x/y)
-    def get_xpos(self):
-        """ Get the ccd x position column """
-        # If in keys, used keys
-        keys = ['x','xpos']
-        for k in keys:
-            try:
-                return self.data[k].values
-            except:
-                pass
+    @classmethod
+    def read_fits(cls, filename, dataext=1, headerext=None, name="catalog",
+                      index_col='Source', **kwargs):
+        """ """
+        from astropy import table
+        data = fits.getdata(filename, ext=dataext)
+        if headerext is None:
+            headerext = dataext
+        header = fits.getheader(filename, ext=headerext)
+        dataframe = table.Table(data).to_pandas()
+        if index_col is not None:
+            dataframe = dataframe.set_index(index_col)
             
-        # Else compute it
-        return self.get_xy_from_radec()[0]
-        
-    def get_ypos(self):
-        # If in keys, used keys
-        keys = ['y','ypos']
-        for k in keys:
-            try:
-                return self.data[k].values
-            except:
-                pass
-        # Else compute it
-        # Note that we could save them but for now we don't
-        return self.get_xy_from_radec()[1]
-
-    def get_xy_from_radec(self, update=True, overwrite=False):
-        """ computes the x and y position given the ziff wcs solution and the radec values. 
-        Store them as xpos and ypos in the current catalog if needed or requested.
-        
-        Parameters
-        ----------
-        update: [bool] -optional-
-            Shall the computed x and y position be stored in the current data as xpos and ypos columns ?
-            
-        overwrite: [bool] -optional-
-            Shall the update be made if the xpos and ypos columns already exist ?
-        
-        Returns
-        -------
-        xy
-        """
-        xy = np.stack(self.ziff.wcs[0].world_to_pixel_values(np.transpose([self.ra,self.dec]))).T
-        if update:
-            if 'xpos' not in self.data.keys() or overwrite:
-                self.data['xpos'] = xy[0]
-                self.data['ypos'] = xy[1]
-                
-        return xy
+        this = cls(dataframe, name=name, **kwargs)
+        this.set_header(header)
+        return this
     
-    def set_mask_pixels(self, mask=None):
-        """ set the column corresponding to the entry to be masked out. 0 kept, 1 removed.
-        Loaded from ziff if mask is None (self.load_ziffmask())
-        """
-        if mask is None:
-            self.load_ziffmask()
-        else:
-            self.data["has_badpix"] = mask
-                
-    def get_xfit(self):
-        """ """        
-        # return self.xpos.query("filter in [1]")
-        return self.xpos[ self.filterflag ]
+    @classmethod
+    def read_psfcat(cls, psfcat, name="ztfcat"):
+        """ loads from ziff.ztfcat[0] """
+        return cls.read_fits(psfcat, name="ztfcat", index_col='sourceid')
 
-    def get_yfit(self):
-        return self.ypos[ self.filterflag ]
 
-    def get_key_fit(self, key):
-        """ """
-        if key in self.data.keys():
-            return self.data[key].values[ self.filterflag ]
-        elif hasattr(self, key):
-            return getattr(self,key)[ self.filterflag ]
-        raise ValueError('key {} not found'.format(key))
-
-    def get_config(self):
-        """ returns the current configuration """
-        config = {}
-        config['name'] = self.name
-        config['filters'] = self._filters
-        return config
-
-    # -------- #
-    #  LOADER  #
-    # -------- #
-    def load_ziffmask(self):
-        """ """
-        rsize = self.ziff.config['i/o']['stamp_size']/2
-        self.data['has_badpix'] = 0
-       
-        for (index, x, y) in zip(self.data.index, self.xpos,self.ypos) :
-            mask_ = self.ziff.mask[0].T[(x-rsize).astype(int): (x +rsize).astype(int), (y-rsize).astype(int): (y +rsize).astype(int)]
-            if mask_.any() == True:
-                self.data.loc[index, 'has_badpix'] = 1
+    def write_to(self, savefile, filtered=True, extension=None, overwrite=True,
+                     safeexit=False, **kwargs):
+        """ generic saving function calling the dedicated format ones (to_fits, to_csv) """
         
-    #--------- #
-    # MATCHING #
-    #--------- #
-    def match(self, catalog, seplimit = 1, filtered = True):
-        """ """
-        skcatalog = catalog.get_skycoord(filtered = filtered)
-        sk = self.get_skycoord(filtered = filtered)
-
-        catalog_idx, self_idx, d2d, d3d = search_around_sky(skcatalog, sk, seplimit=seplimit*u.arcsec)
-        return self_idx, catalog_idx
-
-    def set_is_isolated(self):
-        """ """
-        idx1,idx2 = self.match(self, seplimit = 8)
-        unique, counts = np.unique(idx1, return_counts=True)
-        self.data['is_isolated'] = 0
-        wh = unique[counts == 1]
-        index = self.data.index[wh]
-        self.data.loc[index,'is_isolated'] = 1
-        
-    #---------- #
-    # FILTERING #
-    #---------- #
-    def update_filter(self):
-        """ """
-        self.data.loc[:, 'filter'] = 1
-        for _filter in self._filters:
-            self.data.loc[:, 'filter'] *= self.data.loc[:,_filter]
-    
-    def add_filter(self, key, range_values, name = None):
-        """ """
-        if name is None:
-            name = key + str(range_values)
-        self.data[name] = 0
-        if key in self.data.keys():
-            values = self.data[key]
-        elif hasattr(self, key):
-            values = getattr(self, key)
-        else:
-            raise ValueError("key {} not in keys or attributes ".format(key))
-        index = np.logical_and(values >= range_values[0],values < range_values[1])
-        self.data.loc[index,name] = 1
-        self._filters[name] = {}
-        self._filters[name]['range'] = range_values
-        self._filters[name]['key'] = key
-        self.update_filter()
-
-    def remove_filter(self, name):
-        """ """
-        if name in self.data.keys():
-            self.data.drop(name, axis=1, inplace = True)
-            self._filters.pop(name)
-            self.update_filter()
-        else:
-            raise ValueError("Filter {} not found in dataframe.".format(name))
-    
-    # -------- #
-    #   I/O    #
-    # -------- #
-    def get_datahdu(self, filtered = True):
-        cols = []
-        df = self.data.reset_index()
-        if filtered:
-            df = df.loc[self.filterflag]
-            
-        for _key in df.keys():
-            format = 'K' if df[_key].dtype == 'int' else 'D'
-            cols.append(fits.Column(name = _key, array = df[_key], format = format, ascii = False))
-            
-        return fits.BinTableHDU.from_columns(cols)
-
-    def get_primary_hdu(self):
-        # Same as ztfcat
-        print("DEPRECATED")
-        return fits.open(self.ziff.ztfcat[0])[0]
-
-    
-    def save_fits(self, savefile, filtered=True, overwrite=True, **kwargs):
-        """ """
-        print("DEPRECATED, used writeto")
-        self.writeto(savefile, filtered=filtered, overwrite=overwrite, **kwargs)
-
-        
-    def write_to(self, savefile, filtered=True, format=None, overwrite=True, safeexit=False, header=None):
-        """ generic saving function calling the dedicated format ones (to_fits, to_csv)"""
         if os.path.isfile(savefile):
-            warnings.warn(f"File {savefile} already exists")
+            
             if not overwrite:
                 if safeexit:
+                    warnings.warn(f"File {savefile} already exists ; overwrite is False")
                     return None
                 raise IOError("Cannot overwrite existing file.")
         
-        if format is None:
-            format = os.path.splitext(savefile)[-1]
-            if format is None:
-                raise ValueError("No extension given in savefile and format=None.")
+        if extension is None:
+            extension = os.path.splitext(savefile)[-1]
+            if extension is None:
+                raise ValueError("No extension given in savefile and extension=None.")
         else:
-            if format.startswith("."):
-                savefile = savefile+format
+            if extension.startswith("."):
+                savefile = savefile+extension
             else:
-                savefile = savefile+"."+format
+                savefile = savefile+f".{extension}"
 
         # - 
-        if format in ["fits",".fits"]:
-            self.to_fits(savefile, filtered=filtered, overwrite=overwrite, header=header)
+        if extension in ["fits",".fits"]:
+            self.to_fits(savefile, filtered=filtered, overwrite=overwrite, **kwargs)
+        elif extension in ["csv",".csv"]:
+            self.to_csv(savefile, filtered=filtered, overwrite=overwrite, **kwargs)
         else:
-            raise ValueError("Only fits format implemented")
+            raise ValueError("Only fits and csv format implemented")
 
     def to_fits(self, savefile, header=None, filtered=True, overwrite=False):
         """ Store the catalog as a fits file. 
@@ -371,17 +258,470 @@ class Catalog(object):
         # - Primary
         hdul.append(fits.PrimaryHDU([], header))
         # - Data
-        hdul.append(self.get_datahdu(filtered=filtered))
+        hdul.append( self.get_data(filtered=filtered, as_hdu=True) )
         # -> out
         hdul = fits.HDUList(hdul)
         return hdul.writeto(savefile, overwrite=overwrite)
-        
-        
-    def load_fits(self, path):
+
+    def to_csv(self, savefile, filtered=True, overwrite=False,**kwargs):
         """ """
-        print("load_fits DEPRECATED, use the class function")
-        f = fits.open(path)
-        self.set_data(pd.DataFrame(f[1].data).set_index('Source'))
+        if os.path.isfile(savefile) and not overwrite:
+            raise IOError(f"Cannot overwrite {savefile}")
+        df = self.get_data(filtered=filtered).reset_index()
+        df.to_csv(savefile, **kwargs)
+        
+    # ================ #
+    #   Methods        #
+    # ================ #
+    def change_name(self, new_name):
+        """ change the name on the current catalog. """        
+        self._name = new_name
+
+    # -------- #
+    #  SETTER  #
+    # -------- #
+    def set_data(self, dataframe):
+        """ Set the current dataframe as catalog data. """
+        if type(dataframe) != pandas.DataFrame:
+            try:
+                dataframe = pandas.DataFrame(dataframe)
+            except:
+                raise TypeError("The input dataframe is not a DataFrame and cannot be converted into one.")
+
+        # reshaped:
+        self._data = pandas.DataFrame(dataframe.values.byteswap().newbyteorder(),
+                                      index=dataframe.index, columns=dataframe.columns)
+        
+        if 'filterout' not in self._data.columns:
+            self._data['filterout'] = False
+    
+    def set_wcs(self, wcs):
+        """ Attach an astropy WCS solution to the catalog. """
+        self._wcs = wcs
+
+    def set_header(self, header):
+        """ """
+        if header is None:
+            self._header = fits.Header()
+        elif type(header) is dict:
+            self._header = fits.Header(header)
+        elif type(header) is not fits.Header:
+            raise TypeError(f"input header must be a dict or a fits.Header, {type(header)} given.")
+
+    def set_mask(self, mask):
+        """ set the column corresponding to the entry to be masked out. 0 kept, 1 removed. """
+        self._mask = mask
+        if self.has_data():
+            self.data["masked"] = mask
+
+    def set_skybackground(self, bkgd, askey="sky"):
+        """ """
+        setattr(self,f"_{askey}", bkgd)
+        if self.has_data():
+            self.data[askey] = bkgd
+            
+    # -------- #
+    #  LOADER  #
+    # -------- #
+    def set_sky(self, bkgdimg):
+        """ """
+        print("DEPRECATED")
+        shape= np.shape(bkgdimg)
+        sky =bkgdimg[np.clip(self.ypos,0,shape[0]-1).astype(int),
+                     np.clip(self.xpos,0,shape[1]-1).astype(int)]
+        self.data['sky'] =  sky
+
+    def build_filename(self, prefix="", extension=".fits"):
+        """ returns prefix+self.name+extension """
+        if not extension.startswith("."):
+            extension = f".{extension}"
+            
+        return prefix+self.name+extension
+        
+    def build_sky_from_bkgdimg(self, bkgdimg, stampsize, askey="sky",
+                                   npfunc="nanmean", show_progress=True):
+        """ build background entry based on bkgdimg given the stamp size.
+        
+        Parameters
+        ----------
+        bkgdimg: [2d-array]
+            Background image.
+
+        stampsize: [int]
+            Size of the stamps. 
+            Presence of True in maskimg will be looked for for any catalog entry 
+            [{x/y}-stampsize/2, {x/y}+stampsize/2]
+
+        askey: [string] -optional-
+            The column name inside the dataframe
+
+        npfunc: [string] -optional-
+            Which numpy function should be used to go from a background stamp into a unique background ?
+            
+        show_progress: [bool] -optional-
+            Shall this display the ongoing progress bar ?
+
+        
+        Returns
+        -------
+        None (set_skybackground())
+
+        Example
+        -------
+        if you have a ziff:
+        self.build_sky_from_bkgdimg(ziff.get_background(), ziff.get_config_value("stamp_size", squeeze=True))
+        """
+        rsize = stampsize/2
+        bkgdimg = np.asarray(bkgdimg)
+        if show_progress:
+            from astropy.utils.console import ProgressBar
+            from .utils import is_running_from_notebook
+            bar = ProgressBar( self.npoints, ipython_widget=is_running_from_notebook() )
+        else:
+            bar = None
+            
+        sky_ = np.ones( self.npoints )*np.NaN # nan by default
+        bkgd_shape = np.shape(bkgdimg)
+        # - Images to Catalog entry
+        for i_,(x, y) in enumerate(zip(self.get_xpos(filtered=False),
+                                       self.get_ypos(filtered=False))):
+
+            if bar is not None and not i_%(int(self.npoints/100)):
+                bar.update(i_)
+           
+            ssky_ = bkgdimg[int(x-rsize): int(x +rsize), int(y-rsize): int(y +rsize)]
+            if len(ssky_)>=0: # inside
+                sky_[i_] = getattr(np, npfunc)(ssky_)
+            
+        if bar is not None:
+            bar.update( self.npoints )
+            
+        # - Setting the sky
+        self.set_skybackground(sky_, askey=askey)
+    
+    def build_mask_from_maskimg(self, maskimg, stampsize, show_progress=True):
+        """ build catalog mask based on maskimg given the stamp size.
+        
+        Parameters
+        ----------
+        maskimg: [2d-array boolean]
+            Mask image where True means to be masked out
+
+        stampsize: [int]
+            Size of the stamps. 
+            Presence of True in maskimg will be looked for for any catalog entry 
+            [{x/y}-stampsize/2, {x/y}+stampsize/2]
+
+        Returns
+        -------
+        None (set_mask)
+
+        Example
+        -------
+        if you have a ziff:
+        self.build_mask_from_maskimg(ziff.mask, ziff.get_config_value("stamp_size", squeeze=True))
+        """
+        rsize = stampsize/2
+        
+        if show_progress:
+            from astropy.utils.console import ProgressBar
+            from .utils import is_running_from_notebook
+            bar = ProgressBar( self.npoints, ipython_widget=is_running_from_notebook() )
+        else:
+            bar = None
+            
+        mask_ = np.zeros( self.npoints )
+        
+        for i_,(x, y) in enumerate(zip(self.get_xpos(filtered=False),
+                                       self.get_ypos(filtered=False))):
+            if bar is not None and not i_%(int(self.npoints/100)):
+                bar.update(i_)
+
+            smask_ = maskimg[int(x-rsize): int(x +rsize), int(y-rsize): int(y +rsize)]
+            if smask_.any() == True:
+                mask_[i_] = 1
+                
+        if bar is not None:
+            bar.update( self.npoints )
+            
+        self.set_mask( np.asarray(mask_, dtype="bool") )
+
+        
+    def load_xy_from_radec(self, update=True, overwrite=False, returns=False, wcs=None):
+        """ computes the x and y position given the wcs solution and the radec values. 
+        Store them as xpos and ypos in the current catalog if needed or requested.
+        
+        Parameters
+        ----------
+        update: [bool] -optional-
+            Shall the computed x and y position be stored in the current 
+            data as xpos and ypos columns ?
+            
+        overwrite: [bool] -optional-
+            Shall the update be made if the xpos and ypos columns already exist ?
+        
+        wcs: [astropy.wcs] -optional-
+            WCS used for the conversion. If None given self.wcs will be used if it exists.
+            = remark, if given, this *does not* call set_wcs() =
+
+        Returns
+        -------
+        xy
+        """
+        if wcs is None:
+            if not self.has_wcs():
+                raise AttributeError("no wcs set, no wcs given")
+            wcs = self.wcs
+        
+        x,y = np.asarray( wcs.world_to_pixel_values(self.get_ra(filtered=False),
+                                                    self.get_dec(filtered=False))
+                        )
+        if update:
+            if 'xpos' not in self.data.keys() or overwrite:
+                self.data['xpos'] = x
+                self.data['ypos'] = y
+        if returns:
+            return x,y
+
+    def load_radec_from_xy(self, update=True, overwrite=False, returns=False, wcs=None):
+        """ computes the ra and dec position given the wcs solution and the xpos ypos values. 
+        Store them as ra and dec in the current catalog if needed or requested.
+        
+        Parameters
+        ----------
+        update: [bool] -optional-
+            Shall the computed ra and dec position be stored in the current 
+            data as 'ra' and 'dec' columns ?
+            
+        overwrite: [bool] -optional-
+            Shall the update be made if the xpos and ypos columns already exist ?
+        
+        wcs: [astropy.wcs] -optional-
+            WCS used for the conversion. If None given self.wcs will be used if it exists.
+            = remark, if given, this *does not* call set_wcs() =
+
+        Returns
+        -------
+        ra,dec
+        """
+        if wcs is None:
+            if not self.has_wcs():
+                raise AttributeError("no wcs set, no wcs given")
+            wcs = self.wcs
+            
+        ra, dec = np.asarray( wcs.pixel_to_world_values(self.get_xpos(filtered=False),
+                                                            self.get_ypos(filtered=False))
+                            )
+        if update:
+            if 'ra' not in self.data.keys() or overwrite:
+                self.data['ra'] = ra
+                self.data['dec'] = dec
+                
+        if returns:
+            return ra,dec
+
+    # -------- #
+    #  GETTER  #
+    # -------- #
+    def get_filtered(self, **kwargs):
+        """ Get the filtered version of the catalog 
+        
+        Returns
+        ------
+        self.__class__
+        """
+        return self.__class__(dataframe=self.get_data(filtered=True),
+                              name="filtered_"+self.name,
+                              wcs=self.wcs, header=self.header,
+                              mask=self.mask[~self.filterout],
+                              **kwargs)
+        
+    def get_data(self, filtered=False, as_hdu=False):
+        """ Basis of the catalog class. 
+
+        Returns
+        -------
+        DataFrame
+        """
+        if not self.has_data():
+            raise AttributeError("No data set yet. Use self.set_data()")
+        d_ = self.data[~self.filterout] if filtered else self.data
+        if as_hdu:
+            return dataframe_to_hdu(d_)
+        return d_
+
+    def get_header(self):
+        """ fits header """
+        if self.header is None:
+            return fits.Header()
+        return self.header
+    
+    def get_skycoord(self, filtered=True, **kwargs):
+        """ Get RA, Dec as astropy.coordinates.SkyCoord """
+        return SkyCoord(self.get_ra(filtered=filtered, asserie=False, **kwargs),
+                        self.get_dec(filtered=filtered, asserie=False, **kwargs),
+                        unit = units.deg)
+
+    def get_ra(self, compute=True, filtered=True, asserie=True,**kwargs):
+        """ Get the Right ascension column """
+        if self._rakey is None:
+            if compute:
+                self.load_radec_from_xy(update=True, returns=False)
+            else:
+                return None
+
+        serie_ = self.get_data(filtered=filtered, **kwargs)[self._rakey]        
+        return serie_ if asserie else serie_.values
+
+    
+    def get_dec(self, compute=True, filtered=True, asserie=True,**kwargs):
+        """ Get the Declination column """
+        if self._deckey is None:
+            if compute:
+                self.load_radec_from_xy(update=True, returns=False)
+            else:
+                return None
+
+        serie_ = self.get_data(filtered=filtered, **kwargs)[self._deckey]
+        return serie_ if asserie else serie_.values
+
+    
+    def get_xpos(self, filtered=True, compute=True, asserie=True,**kwargs):
+        """ Get the ccd x position column. This corresponds to images.data[x,y] not data.T[x,y]"""
+        # If in keys, used keys
+        if self._xposkey is None:
+            if compute:
+                self.load_xy_from_radec(update=True, returns=False)
+            else:
+                return None
+        
+        serie_ = self.get_data(filtered=filtered, **kwargs)[self._xposkey]
+        return serie_ if asserie else serie_.values
+
+        
+    def get_ypos(self, compute=True, filtered=True, asserie=True,**kwargs):
+        """ Get the ccd y position column. This corresponds to images.data[x,y] not data.T[x,y]"""
+        if self._yposkey is None:
+            if compute:
+                self.load_xy_from_radec(update=True, returns=False)
+            else:
+                return None
+        
+        serie_ = self.get_data(filtered=filtered, **kwargs)[self._yposkey]
+        return serie_ if asserie else serie_.values
+
+    def get_config(self):
+        """ returns the current configuration """
+        config = {}
+        config['name'] = self.name
+        config['filters'] = self._filters
+        return config
+
+    # -------- #
+    #  LOADER  #
+    # -------- #
+    #--------- #
+    # MATCHING #
+    #--------- #
+    def match(self, catalog, seplimit = 1*units.arcsec, filtered = False):
+        """ """
+        skcatalog = catalog.get_skycoord(filtered = filtered)
+        sk = self.get_skycoord(filtered = filtered)
+
+        catalog_idx, self_idx, d2d, d3d = sk.search_around_sky(skcatalog,
+                                                            seplimit=seplimit)
+        return self_idx, catalog_idx
+
+    def measure_isolation(self, refcat=None, seplimit=8):
+        """ 
+        
+        Parameters
+        ----------
+        refcat: [Catalog or None] -optional-
+            Refence catalog. Isolation will be measured as matching of self with this catalog.
+            = IMPORTANT, refcat must include at least *all* the current catalog entries =
+            If None, self will be used (self isolation).
+
+        seplimit: [float] -optional-
+            isolation distance in arcsec
+        
+        Returns
+        -------
+        
+        """
+        if refcat is None:
+            refcat = self
+            
+        idx1, idx2 = self.match(refcat, seplimit=seplimit*units.arcsec, filtered=False)
+        unique, counts = np.unique(idx1, return_counts=True)
+        self.data["n_nearsources"] = counts-1
+        self.data['is_isolated'] = (self.data["n_nearsources"]==0)        
+    #---------- #
+    # FILTERING #
+    #---------- #
+    def update_filter(self, reset=True, used_filters=None):
+        """ """
+        if used_filters is None:
+            used_filters = list(self._filters.keys())
+        if 'filterout' in self.data.columns and not reset:
+            used_filters += ["filterout"]
+            
+        self.data.loc[:, 'filterout'] = self.data[used_filters].sum(axis=1).astype("bool")
+    
+    def add_filter(self, key, range_values, name = None, update=True):
+        """ """
+        if name is None:
+            name = key + str(range_values)
+
+        if key in ["xpos","ypos"] and key not in self.data.keys():
+            self.load_xy_from_radec(update=True, returns=False)
+        elif key in ["ra","dec"] and key not in self.data.keys():
+            self.load_radec_from_xy(update=True, returns=False)
+            
+        self.data[name] = False
+
+        if len(np.atleast_1d(range_values))==2:
+            print(f"{key} between {range_values}")
+            self.data.loc[:,name] = ~self.data[key].between(*range_values)
+        elif len(np.atleast_1d(range_values))==1:
+            print(f"{key} equals {range_values}")
+            self.data.loc[:,name] = ~(self.data[key] == np.atleast_1d(range_values)[0])
+        else:
+            raise ValueError("cannot parse the given range_values, should have size 1 or 2")
+        
+        self._filters[name] = {'range':range_values,
+                               'key':key}
+        if update:
+            self.update_filter()
+
+    def remove_filter(self, name):
+        """ """
+        if name in self.data.keys():
+            self.data.drop(name, axis=1, inplace = True)
+            self._filters.pop(name)
+            self.update_filter()
+        else:
+            raise ValueError(f"Filter {name} not found in dataframe.")
+    
+    # --------- #
+    #  Internal #
+    # --------- #
+    def _fetch_datakey_(self, trialkeys, safeout=False):
+        """ """
+        if not self.has_data():
+            raise AttributeError("No data set.")
+        
+        trialkeys = np.asarray(trialkeys)
+        keyin = np.isin(trialkeys, self.data.columns)
+        if not np.any(keyin):
+            if safeout:
+                return None
+            raise ValueError(f"None of {trialkeys} are data columns")
+        if len(keyin[keyin])>1:
+            warnings.warn(f"Several of {trialkeys} are in data columns, first used.")
+            
+        return trialkeys[keyin][0]
+        
 
     # ================ #
     #   Properties     #
@@ -394,39 +734,60 @@ class Catalog(object):
     @property
     def data(self):
         """ catalog data """
-        return self._data#get_data()
-        
-    def hasdata(self):
+        return self._data
+
+    @property
+    def npoints(self):
+        """ number of data entries """
+        return len(self.data) if self.has_data() else None
+    
+    def has_data(self):
         """ test if the data as been set."""
         return hasattr(self, '_data')
 
     @property
-    def dataframe(self):
+    def wcs(self):
         """ """
-        print("self.dataframe is DEPRECATED, use self.data")
-        return self.data #self._dataframe
+        if not self.has_wcs():
+            return None
+        return self._wcs
+
+    def has_wcs(self):
+        """ """
+        return hasattr(self,"_wcs") and self._wcs is not None
 
     @property
-    def df(self):
-        """ Shortcut for self.dataframe """
-        print("self.data is DEPRECATED, use self.data")
-        return self.data # self.dataframe
+    def header(self):
+        """ """
+        if not hasattr(self,"_header"):
+            return None
+        return self._header
 
-
+    @property    
+    def mask(self):
+        """ """
+        if not hasattr(self,"_mask"):
+            return None
+        return self._mask
+    
     @property
-    def filterflag(self):
+    def filterout(self):
         """ boolean array corresponding to 
-        np.asarray(self.data['filter'], dtype="bool")
+        np.asarray(self.data['filterout'], dtype="bool")
         """
-        return np.asarray(self.data['filter'], dtype="bool")
+        if 'filterout' in self.data:
+            return np.asarray(self.data['filterout'], dtype="bool")
+        
+        return np.asarray(np.zeros(len(self.data)), dtype="bool")
+    
     @property
     def filtered_index(self):
         """ dataframe index of the data filtered """
-        return self.data.loc[self.filterflag].index
+        return self.data.loc[self.filterout].index
 
     @property
     def filtered_iindex(self):
-        return np.where( self.filterflag )[0]
+        return np.where( self.filterout )[0]
     
     @property
     def xpos(self):
@@ -434,14 +795,35 @@ class Catalog(object):
         return self.get_xpos()
 
     @property
+    def _xposkey(self):
+        """ The ccd y position key """
+        if not hasattr(self,"_hxposkey") or self._hxposkey is None:
+            self._hxposkey = self._fetch_datakey_(['X','x','XPOS','xpos'], safeout=True)
+        return self._hxposkey
+
+    @property
     def ypos(self):
         """ y ccd position, shortcut of self.get_ypos()"""        
         return self.get_ypos()
 
     @property
+    def _yposkey(self):
+        """ The ccd y position key """
+        if not hasattr(self,"_hyposkey") or self._hyposkey is None:
+            self._hyposkey = self._fetch_datakey_(['Y','y','YPOS','ypos'], safeout=True)
+        return self._hyposkey
+    
+    @property
     def ra(self):
         """ ra coordinate, shortcut of self.get_ra()"""
         return self.get_ra()
+    
+    @property
+    def _rakey(self):
+        """ The RA key """
+        if not hasattr(self,"_hrakey") or self._hrakey is None:
+            self._hrakey = self._fetch_datakey_(['RA_ICRS','RA','ra'], safeout=True)
+        return self._hrakey
 
     @property
     def dec(self):
@@ -449,119 +831,492 @@ class Catalog(object):
         return self.get_dec()
 
     @property
-    def skycoord(self):
-        """ astropy SkyCoord of ra and dec """
-        return SkyCoord(self.ra,self.dec, unit = u.deg)
+    def _deckey(self):
+        """ The Declination key """
+        if not hasattr(self,"_hdeckey") or self._hdeckey is None:
+            self._hdeckey = self._fetch_datakey_(['DE_ICRS','DE','de','DEC','dec'], safeout=True)
+        return self._hdeckey
     
     @property
-    def ziff(self):
-        """ attached ziff object. """
-        return self._ziff
+    def skycoord(self):
+        """ astropy SkyCoord of ra and dec """
+        return self.get_skycoord()
 
+    
+class CatalogCollection( Catalog ):
+
+    def __init__(self, catalogs=None, load_data=True):
+        """ """
+        super().__init__()
+        if catalogs is not None:
+            self.set_catalogs( catalogs, load_data=load_data)
+
+
+    @classmethod
+    def load(cls, filenames, names=None, squeeze=True, **kwargs):
+        """ """
+        filenames = np.atleast_1d(filenames)
+        if names is None:
+            names = [f"cat{i}" for i in range(len(filenames))]
+            
+        if len(filenames)==1 and squeeze:
+            return Catalog.load(filenames[0], name=names[0], **kwargs)
+
+        if len(names) != len(filenames):
+            raise ValueError(f"names must have the same size as filenames {len(names)} vs. {len(filenames)}")
+        
+        return cls([Catalog.load(filename_, name=name_, **kwargs)
+                    for filename_, name_ in zip(filenames, names)])
+    
+
+    @classmethod        
+    def read_cvs(cls, filenames, name="catalog", index_col=None, readprop={}, **kwargs):
+        """ """
+        return NotImplementedError("read_cvs to be implemented")
+
+    @classmethod
+    def read_fits(cls, filename, dataext=1, headerext=None, name="catalog",
+                      index_col='Source', **kwargs):
+        """ """
+        return NotImplementedError("read_fits to be implemented")
+
+    def read_psfcat(cls, psfcat, name="ztfcat"):
+        """ loads from ziff.ztfcat[0] """
+        return NotImplementedError("read_fits to be implemented")
+    
+    # ----- #
+    #  I/O  #
+    # ----- #
+    def write_to(self, savefile, filtered=True, extension=None, overwrite=True,
+                     safeexit=False, **kwargs):
+        """ """
+        if len(np.atleast_1d(savefile)) == self.ncatalogs:
+            self._call_down_("write_to", isfunc=True,
+                              enumargs=savefile, # this will be go in one at the time.
+                              filtered=filtered, extension=extension,
+                              overwrite=overwrite, safeexit=safeexit, **kwargs)
+        else:
+            return NotImplementedError("single write_to not implemented for CatalogCollection")
+
+    def to_fits(self):
+        """ """
+        print("not done yet")
+    def to_csv(self):
+        """ """
+        print("not done yet")
+        
+    # ================ #
+    #   Methods        #
+    # ================ #
+    def _multi_set_(self, key, value, setkey=None):
+        """ this do self.{key} = [value] """
+        value = np.atleast_1d(value)
+        if len(value) == 1:
+            value = [value[0]]*self.ncatalogs
+                
+        if len(value) != self.ncatalogs:
+            raise ValueError(f"size of {key} must be one or one per catalogs {self.ncatalogs}. {len(value)} given. ")
+
+        if setkey is None:
+            setkey = f"_{key}"
+
+        setattr(self, setkey, value)
+
+    def _multi_set_down_(self, key, values, **kwargs):
+        """ this loops of over the catalog to call catalog.set_{key}(value, **kwargs) """
+        values = np.atleast_1d(values)
+        if len(values) == 1:
+            values = [values[0]]*self.ncatalogs
+                
+        if len(values) != self.ncatalogs:
+            raise ValueError(f"size of {key} must be one or one per catalogs {self.ncatalogs}. {len(value)} given. ")
+        
+        return [getattr(cat,f"set_{key}")(v_, **kwargs)
+                    for (cat,v_) in zip(self.catalogs, values)]
+
+    def _call_down_(self, key_, enumargs=None, isfunc=True, **kwargs):
+        """ this loops of over the catalogs to call catalog.{key}(*args, **kwargs) if isfunc or catalog.{key} if not """
+        if not isfunc:
+            return [getattr(c_, key_) for c_ in self.catalogs]
+
+        if enumargs is None:
+            return [getattr(c_, key_)(**kwargs) for c_ in self.catalogs]
+
+        out = []
+        for i, c_ in enumerate(self.catalogs):
+            if len(np.atleast_1d(enumargs[i])) == 1:
+                out.append(getattr(c_, key_)(enumargs[i], **kwargs))
+            else:
+                out.append(getattr(c_, key_)(*enumargs[i], **kwargs))
+        return out
+
+    # -------- #
+    # LAODER   #
+    # -------- #
+    def _load_data_(self, names="default"):
+        """ """
+        dataframes = self._call_down_("data", isfunc=False)
+        if names in ["default"]:
+            names = self._call_down_("name", isfunc=False)
+            
+        self.set_data(dataframes, keys=names)
+
+    def build_filename(self, prefix="", extension=".fits", percatalog=True, **kwargs):
+        """ returns prefix+self.name+extension """
+        if len( np.atleast_1d(prefix) ) == 1 and not percatalog:
+            prefix = np.atleast_1d(prefix)[0]
+            return super().build_filename(prefix, extension=extension, **kwargs)
+        
+        if len( np.atleast_1d(prefix) ) == 1: # same for all
+            prefix = [np.atleast_1d(prefix)[0]]*self.ncatalogs
+                
+        prefix = [f"{prefix_}{self.name}{i}_" for i,prefix_ in enumerate(prefix)]
+        return self._call_down_("build_filename", isfunc=True,
+                              enumargs=prefix, extension=extension, **kwargs)
+
+    
+    def build_sky_from_bkgdimg(self, bkgdimg, stampsize, askey="sky",
+                                   npfunc="nanmean", show_progress=True,
+                                   update=True):
+        """ """
+        if len(np.shape(bkgdimg))==2:
+            bkgdimg = [bkgdimg]
+            
+        unique_bkgdimg = np.shape(bkgdimg)[0]==1
+        stampsize = np.atleast_1d(stampsize)
+        unique_stamp = len(stampsize)==1
+        
+        out = [c.build_sky_from_bkgdimg(bkgdimg[0] if unique_bkgdimg else bkgdimg[i],
+                                        stampsize[0] if unique_stamp else stampsize[i],
+                                        show_progress=show_progress)
+                                      for i,c in enumerate(self.catalogs)
+                ]
+    
+        if update:
+            self._load_data_()
+        return out
+    
+    def build_mask_from_maskimg(self, maskimg, stampsize, show_progress=True,
+                                    update=True):
+        """ """
+        if len(np.shape(maskimg))==2:
+            maskimg = [maskimg]
+            
+        unique_masking = np.shape(maskimg)[0]==1
+        stampsize = np.atleast_1d(stampsize)
+        unique_stamp = len(stampsize)==1
+        
+        out =  [c.build_mask_from_maskimg(maskimg[0] if unique_masking else maskimg[i],
+                                          stampsize[0] if unique_stamp else stampsize[i],
+                                          show_progress=show_progress)
+                                    for i,c in enumerate(self.catalogs)
+                ]
+        if update:
+            self._load_data_()
+        return out
+        
+    def load_xy_from_radec(self, update=True, overwrite=False, returns=False):
+        """ """
+        out =  self._call_down_("load_xy_from_radec", isfunc=True, update=True,
+                                    overwrite=False, returns=False)
+        if update:
+            self._load_data_()
+        return out
+    
+    def load_radec_from_xy(self, update=True, overwrite=False, returns=False):
+        """ """
+        out = self._call_down_("load_radec_from_xy", isfunc=True, update=True,
+                                   overwrite=False, returns=False)
+        if update:
+            self._load_data_()
+            
+        return out
+    
+    # -------- #
+    # SETTER   #
+    # -------- #
+    def set_catalogs(self, catalogs, load_data=True):
+        """ """
+        self._catalogs = np.atleast_1d(catalogs)
+        if load_data:
+            self._load_data_()
+        
+    # change_name OK
+    def set_data(self, dataframes, keys=None, clean_nameduplicate=True):
+        """ """
+        if keys is None:
+            keys = [f"cat{i}" for i in range(self.ncatalogs)]
+
+        # SingleIndex
+        if len(dataframes) == self.ncatalogs:
+            if clean_nameduplicate:
+                from .utils import avoid_duplicate
+                keys = avoid_duplicate(keys)
+            
+            dataframes = pandas.concat(dataframes, keys=keys)
+            
+        elif type(dataframes.index) is not pandas.MultiIndex:
+            raise TypeError("dataframes must be MultiIndex or list of dataframes")
+        
+        return super().set_data(dataframes)
+        
+    def set_wcs(self, wcs):
+        """ """
+        self._multi_set_down_("wcs", wcs)
+
+    def set_header(self, header):
+        """ """
+        self._multi_set_down_("header", header)
+    
+    def set_mask(self, mask):
+        """ """
+        self._multi_set_down_("mask", mask)
+
+    # -------- #
+    #  GETTER  #
+    # -------- #
+    def get_filtered(self, **kwargs):
+        """ """
+        filtered_cat = [cat.get_filtered(**kwargs) for cat in self.catalogs]
+        return self.__class__(catalogs=filtered_cat)
+
+    def get_data(self, catname=None, source=None, filtered=False, as_hdu=False):
+        """
+
+        Parameters
+        ----------
+        catname: [string]
+            Get the only the data assocated to the given catalog
+
+        source: [string]
+            Get only the data corresponding to the given source
+            = ignored if catname is not None =
+            
+        filtered: [bool]
+            Do you want the filtered data ?
+        
+
+        as_hdu: [bool]
+            shall the data be returned in fits.hdu ?
+    
+        Returns
+        -------
+        DataFrame (or hdu, see as_hdu)
+        """
+        if not self.has_data():
+            raise AttributeError("No data set yet. Use self.set_data()")
+
+        if catname is not None:
+            d_ = self.get_subdata(catname, level=0, filtered=filtered)
+        elif source is not None:
+            d_ = self.get_subdata(source, level=1, filtered=filtered)
+        else:
+            d_ = self.data[~self.filterout] if filtered else self.data
+            
+        if as_hdu:
+            return dataframe_to_hdu(d_)
+        return d_
+    
+    def get_subdata(self, index, level, filtered=False):
+        """ """
+        if filtered:
+            return self.data[~self.filterout].xs(index, level=level)
+            
+        return self.data.xs(index, level=level)
+
+    def get_config(self, first=True):
+        """ returns the current configuration """
+        config_list = self._call_down_("get_config", isfunc=True)
+        if first:
+            return config_list[0]
+        return config_list
+
+    def measure_isolation(self, refcat=None, seplimit=8):
+        """ 
+        
+        Parameters
+        ----------
+        refcat: [Catalog or None] -optional-
+            Refence catalog. Isolation will be measured as matching of self with this catalog.
+            = IMPORTANT, refcat must include at least *all* the current catalog entries =
+            If None, self will be used (self isolation).
+
+        seplimit: [float] -optional-
+            isolation distance in arcsec
+        
+        Returns
+        -------
+        
+        """
+        self._call_down_("measure_isolation", refcat=refcat, seplimit=seplimit, isfunc=True)
+        self._load_data_()
+        
+    #---------- #
+    # FILTERING #
+    #---------- #
+    def update_filter(self):
+        """ """
+        self._call_down_("update_filter", isfunc=True)
+        self._load_data_()
+    
+    
+    def add_filter(self, key, range_values, name = None, update=True):
+        """ """
+        self._call_down_("add_filter", key=key, range_values=range_values,
+                             name=name, isfunc=True, update=False)
+        if update:
+            self.update_filter()
+        
+
+    def remove_filter(self, name):
+        """ """
+        if name in self.data.keys():
+            self.data.drop(name, axis=1, inplace = True)
+            self._filters.pop(name)
+            self.update_filter()
+        else:
+            raise ValueError(f"Filter {name} not found in dataframe.")
+    # ================ #
+    #   Property       #
+    # ================ #
+    @property
+    def catalogs(self):
+        """ list of ziff.Catalog"""
+        return self._catalogs
+
+    @property
+    def catnames(self):
+        """ """
+        return self.data.index.get_level_values(0).unique()
+    
+    def has_catalogs(self):
+        """ """
+        return hasattr(self,"_catalogs") and self._catalogs is not None and len(self._catalogs)>0
+
+    @property
+    def ncatalogs(self):
+        """ """
+        return len(self.catalogs)
+
+    # - super it
+    @property
+    def data(self):
+        """ """
+        if not hasattr(self, "_data"):
+            self._load_data_()
+            
+        return super().data
+
+    @property
+    def wcs(self):
+        """ """
+        return self._call_down_("wcs", isfunc=False)
+
+    def has_wcs(self, test="all"):
+        """ """
+        return getattr(np, test)(self._call_down_("has_wcs", isfunc=True))
+
+    @property
+    def mask(self):
+        """ """
+        return np.asarray( self._call_down_("mask", isfunc=False) )
+
+    @property
+    def filterout(self):
+        """ """
+        return np.asarray( self._call_down_("filterout", isfunc=False) )
+    
+    @property
+    def header(self):
+        """ """
+        return self._call_down_("header", isfunc=False)
+    
 ######################
 #                    #
 #  Derived Catalogs  #
 #                    #
 ######################
 
-class ReferenceCatalog(Catalog):
+class _CatalogHolder_( object ):
+    """ """
     
-    def __init__(self, ziff, name = None, which = 'GAIA'):
-        if name is None:
-            name =  which
-        super().__init__(ziff = ziff, name = name)
-        
-        if which in ['GAIA','gaia','Gaia']:
-            self._which = 'gaia'
-        elif which in ['PS','PS1','PanStarrs']:
-            raise NotImplementedError('Please contact Melissa.')
-        else:
-            raise NotImplementedError("Only Gaia supported")
-
-    # ------------ #
-    #  Download    #
-    # ------------ #
-    def download(self, **kwargs):
-        """ Dowloads the catalog. """
-        # Sometimes there is an issue with the query, which leads to 0 entries and an index error. In this case we just retry once
-        retry = kwargs.get("retry", True)
-        
-        if self._which == 'gaia':
-            try:
-                df = self.fetch_gaia_catalog(**kwargs).to_pandas().set_index('Source')
-            except IndexError:
-                if retry:
-                    print("Retrying to download gaia cats")
-                    self.download(**{**kwargs,**{"retry":False}})
-                else:
-                    warnings.warn("gaia catalog downloading failed")
-                    return
-        else:
-            raise NotImplementedError(" Only gaia catalog downloading has been implemented ")
-        
-        self.set_data(df)
+    # ================ #
+    #   Methods        #
+    # ================ #
+    # -------- #
+    #  I/O     #
+    # -------- #
+    def load_catalog(self, filename, name, **kwargs):
+        """ """
+        self.set_catalog(Catalog.load(filename, name=name, multi_ok=True,
+                            **{**{"extension":1},**kwargs}, ))
                 
-    
-    def get_config(self):
-        """ returns the current configuration """
-        config = super().get_config()
-        config['which'] = self._which
-        return config
-    
-    def fetch_gaia_catalog(self, radius= 0.75, r_unit="deg",column_filters={'Gmag': '10..20'},**kwargs):
-        """ query online gaia-catalog in Vizier (I/345, DR2) using astroquery.
-        This function requieres an internet connection.
+    # -------- #
+    #  SETTER  #
+    # -------- #
+    def set_catalog(self, catalog, name=None):
+        """ Add a new catalog """
+        if name is None:
+            name = catalog.name
+            
+        self.catalog[name] = catalog
+
+    # -------- #
+    #  GETTER  #
+    # -------- #
+    def get_catalog(self, catalog, idx=None):
+        """ Eval if catalog is a name or an object. Returns the object """
+        #
+        # A bit messy but clean the issue of list of catalog if any.
+        #
+        if isinstance(catalog, str):
+            if len( np.atleast_1d(self.catalog[catalog]) )==1 or idx is None:
+                return self.catalog[catalog]
+            else:
+                return self.catalog[catalog].catalogs[idx]
         
-        Parameters
-        ----------
-        center: [string] 'ra dec'
-        position of the center of the catalog to query.
-        (we use the radec of center of the quadrant)
+        return catalog
         
-        radius: [string] 'value unit'
-        radius of the region to query. For instance '1d' means a
-        1 degree raduis
-        (from the center of the quadrant to the border it is about 0.65 deg, ask Philippe for details if)
-
-        extracolumns: [list-of-string] -optional-
-        Add extra column from the V/139 catalog that will be added to
-        the basic query (default: position, ID, object-type, magnitudes)
-        column_filters: [dict] -optional-
-        Selection criterium for the queried catalog.
-        (we have chosen G badn, it coers from 300 to 1000 nm in wavelength)
-
-        **kwargs goes to astroquery.vizier.Vizier
-
-        Returns
-        -------
-        GAIA Catalog (child of Catalog)
-        """
-        from astroquery import vizier
-        columns = ["Source","RA_ICRS","e_RA_ICRS","DE_ICRS","e_ED_ICRS", "Gmag", "RPmag", "BPmag"]
-        #for band in SDSS_INFO["bands"]:
-
-        #try:
-        coord = SkyCoord(ra=self.ziff.ra[0],dec=self.ziff.dec[0], unit=(u.deg,u.deg))
-        angle = Angle(radius,r_unit)
-        v = vizier.Vizier(columns, column_filters=column_filters)
-        v.ROW_LIMIT = -1
-        # cache is False is necessary, notably when running in a computing center.
-        t = v.query_region(coord, radius=angle,catalog="I/345/gaia2", cache=False).values()[0]
-        t['colormag'] = t['RPmag'] - t['BPmag']
-        return t
+    def _get_stored_catalog_(self, catalog, idx=None, fileout=None,
+                                 overwrite=True, filtered=True):
+        """ """
+        cat = self.get_catalog(catalog, idx=idx)
+        if fileout is None:
+            fileout = cat.build_filename("tmpcat_", extension=".fits")
+            
+        cat.write_to(fileout, overwrite=overwrite, filtered=filtered)
+        return cat, fileout
     
-
-class BaselineCatalog(ReferenceCatalog):
-    def __init__(self, ziff, name = None, which = 'GAIA'):
-        super().__init__(ziff, name, which)
-        self.download()
-        self.set_is_isolated()
-        self.add_filter('Gmag',[13,15], name = 'mag_filter')
-        self.add_filter('xpos',[100,2900], name = 'border_filter_x')
-        self.add_filter('ypos',[100,2900], name = 'border_filter_y')
-        self.add_filter('is_isolated',[1,2], name = 'isolated_filter')
+    def get_stacked_cat_df(self):
+        """ """        
+        dfs = {}
+        for cat in self.catalog:
+            c = self.get_catalog(cat)
+            df = []
+            for i in range(self.nimgs):
+                dfi = c[i].data
+                dfi = dfi.loc[~dfi['filterout']]
+                df.append(dfi)
+            dfs[cat] = pandas.concat(df)
+        return dfs
     
+    # ================ #
+    #   Properties     #
+    # ================ #
+    # - Catalogs
+    @property
+    def catalog(self):
+        """ Dictionnary of catalogs """
+        if not hasattr(self, "_catalog"):
+            self._catalog = {}
+            
+        return self._catalog
+    
+    def has_catalog(self):
+        """ """
+        return hasattr(self,"_catalog") and len(self.catalog)>0
     
 # End of catalog.py ========================================================
 
 #  LocalWords:  toprimary
+

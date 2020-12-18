@@ -1,43 +1,26 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-################################################################################
-# Filename:          ziff.py
-# Description:       script description
-# Author:            Romain Graziani <romain.graziani@clermont.in2p3.fr>
-# Author:            $Author: rgraziani $
-# Created on:        $Date: 2020/09/21 10:40:18 $
-# Modified on:       2020/10/13 15:24:04
-# Copyright:         2019, Romain Graziani
-# $Id: ziff.py, 2020/09/21 10:40:18  RG $
-################################################################################
-
-"""
-.. _ziff.py:
-
-ziff.py
-==============
-
-
-"""
-__license__ = "2019, Romain Graziani"
-__docformat__ = 'reStructuredText'
-__author__ = 'Romain Graziani <romain.graziani@clermont.in2p3.fr>'
-__date__ = '2020/09/21 10:40:18'
-__adv__ = 'ziff.py'
+""" Applying the PIFF PSF software (Jarvis et al.) on ZTF images """
 
 import os
 import numpy as np
-from astropy.io import fits
-from astropy.wcs import WCS
+import pandas as pd
 import json
 import pkg_resources
-from .catalog import Catalog, ReferenceCatalog
 import logging
+
+from astropy.io import fits
+from astropy.wcs import WCS
+
+# - PIFF
 import piff
 from piff.star import Star, StarData, StarFit
 
-import galsim
-import pandas as pd
+# - zfquery / ztfimg
+from ztfimg import image
+
+# - LOCAL
+from .catalog import Catalog
 
 collection_functions = [
     'set_config_value',
@@ -57,7 +40,8 @@ collection_functions = [
 class Ziff(object):
     # Wrapper of piff for ztf
     
-    def __init__ (self, sciimg, mskimg=None, logger=None,
+    def __init__ (self, sciimg, mskimg=None,
+                      logger=None,
                       build_default_cat=True, load_default_cat=True,
                       check_exist=True, save_cat=True):
         """Wrapper of PIFF for ZTF 
@@ -89,23 +73,17 @@ class Ziff(object):
 
         
         """
-
-        sciimg = np.atleast_1d(sciimg)
-        if check_exist:
-            for s in sciimg:
-                if not os.path.exists(s):
-                    raise FileNotFoundError(f"{s} does not exist.")
-                
-        self._sciimg = sciimg
-        self.set_mskimg(mskimg)
-        self.set_logger(logger)
-        self._catalog = {}
         self.load_default_config()
-        
-        if load_default_cat:
-            self.load_default_catalog()
-        elif build_default_cat:
-            self.build_default_catalog(save_cat = save_cat)
+        if sciimg is not None:
+            self.load_images(sciimg, mskimg)
+        if logger is not None:
+            self.set_logger(logger)
+            
+        # - Catalogs
+#        if load_default_cat:
+#            self.load_default_catalog()
+#        elif build_default_cat:
+#            self.build_default_catalog(save_cat = save_cat)
 
     @classmethod
     def from_file(cls, filename, row=0, **kwargs):
@@ -124,23 +102,48 @@ class Ziff(object):
         mskimg_list =  zquery.get_local_data("mskimg.fits")
         return cls(sciimg_list, mskimg_list, **kwargs) #cls(name, date.today().year - year)
     
-
+    @classmethod
+    def from_ztfimage(cls, ztfimage):
+        """ """
+        this = cls()
+        this.set_ztfimage(ztfimage)
+        
     # ================ #
     #   Methods        #
     # ================ #
     # -------- #
     #  LOADER  #
     # -------- #
+    def load_images(self, images, masks=None, download=False):
+        """ Builds the ztfimages from the given filepath and calls self.set_images() """
+        from ztfimg import image
+        
+        # Handles list / single
+        images = np.atleast_1d(images)
+        
+        # Handles mask I/O
+        if masks is not None:
+            masks = np.atleast_1d(masks)
+            if len(masks) != len(images):
+                raise ValueError("You gave {len(masks)} masks and {len(images)} images. size of mskimg must match or be None")
+        else:
+            masks = [None for i in len(images)]
+
+        # Buiuld the ztfimage
+        ztfimages = [image.ScienceImage.from_filename(image_, mask_, download=download)
+                         for (image_, mask_) in zip(images, masks)]
+        
+        self.set_images(ztfimages)
+        
     def load_default_config(self):
         """ Load the default configuration settings using default configuration file """
         file_name = pkg_resources.resource_filename('ziff', 'data/default_config.json')
         with open(file_name) as config_file:
             self.config = json.load(config_file)
             
-        # add the filename
-        self.config['i/o']['image_file_name'] = self._sciimg.tolist()
 
     def load_default_catalog(self):
+        """ """
         print("Loading default catalogs")
         try:
             self.set_catalog([self.get_catalog('gaia_calibration',i) for i in range(self.nimgs)])
@@ -172,7 +175,7 @@ class Ziff(object):
             
     def build_default_calibration_cat(self, num):
         """ """
-        subziff = self.create_singleimg_ziff(num)
+        subziff = self.get_singleimg_ziff(num)
         c = ReferenceCatalog(ziff = subziff, which = 'gaia', name = 'gaia_calibration') # Catalog object
         c.download() # fetch gaia catalog
         # Filters
@@ -191,7 +194,7 @@ class Ziff(object):
 
     def build_default_full_cat(self, num):
         """ """
-        subziff = self.create_singleimg_ziff(num)
+        subziff = self.get_singleimg_ziff(num)
         c = ReferenceCatalog(ziff = subziff, which = 'gaia', name = 'gaia_full')
         c.download()
         c.set_sky()
@@ -216,26 +219,34 @@ class Ziff(object):
     # -------- #
     #  SETTER  #
     # -------- #
-    def set_mskimg(self, mskimg=None):
-        """ Set mskimg, or find one if it's None """
-        if mskimg is None:
-            self._mskimg = [None]*self.nimgs
-            for i,(s,p) in enumerate(zip(self._sciimg,self.prefix)):
-                if os.path.exists(p+'mskimg.fits'):
-                    self._mskimg[i] = p + 'mskimg.fits'
-        else:
-            self._mskimg = np.atleast_1d(mskimg)
-            assert(len(self._mskimg) == len(self._sciimg))
-
+    def set_images(self, ztfimages):
+        """ Set a (list of) image(s) to the Ziff instance. """
+        ztfimg =  np.atleast_1d(ztfimages)
+        for ztfimg_ in ztfimg:
+            if image.ZTFImage not in ztfimg_:
+                raise TypeError("The given images must be image.ZTFImage (or inherite from) ")
+            
+        self._images = ztfimg
+        # add the filename
+        self.config['i/o']['image_file_name'] = self._sciimg
+        
     def set_logger(self, logger=None):
         """ set the logger that is going to be passed to piff """
         if logger is None:
             logging.basicConfig(filename=self.prefix[0] + 'logger.piff',level=logging.DEBUG)
             logger = logging.getLogger()
-            self.logger = logger
+            self._logger = logger
         else:
-            self.logger = logger
+            self._logger = logger
     
+    def set_catalog(self, catalogs, name=None):
+        """ Add a new catalog """
+        if name is None:
+            name = catalogs[0].name # odd to have a [0] here
+            
+        self._catalog[catalogs[0].name] = catalogs
+
+    # - Update configuration
     def set_config_value(self, key_path, value, sep=','):
         """ update the configuration values """
         # Should be cleaned but it works
@@ -244,42 +255,35 @@ class Ziff(object):
         if isinstance(value, str):
             to_eval = 'config' + ''.join([f"['{k}']" for k in kp]) + f" = '{value}'"
         exec(to_eval,{'config':self.config})
-
-    def set_default_config(self):
-        """ Load the default configuration settings using default configuration file """
-        print("DEPRECATED, set_default_config -> load_default_config")
-        return self.load_default_config()
-    
-    def set_catalog(self, catalogs, name=None):
-        """ Add a new catalog """
-        if name is None:
-            name = catalogs[0].name # odd to have a [0] here
-            
-        self._catalog[catalogs[0].name] = catalogs
         
     # -------- #
     #  GETTER  #
     # -------- #            
-    def create_singleimg_ziff(self, num):
+    def get_singleimg_ziff(self, num):
         """ create a new Ziff instance with single image """
-        return Ziff(self._sciimg[num],self._mskimg[num],logger=self.logger, load_default_cat = False, build_default_cat = False, save_cat = False)
-    
-    def get_prefix(self):
-        """ Get the img prefix """
-        # IO Stuffs
-        return ['_'.join(s.split('_')[0:-1])+'_' for s in self._sciimg]
+        return Ziff.from_ztfimage(self.images[num], logger=self.logger)
 
     def get_dir(self):
         """ Get the directory of the image """
         # IO Stuffs        
-        return [os.path.dirname(s) for s in self._sciimg]    
+        return [os.path.dirname(s) for s in self._sciimg]
 
+    def get_header(self):
+        """Get the header of the image """
+        return [img_.header for img_ in self.images]
     
-    def get_catalog(self, name, num):
+    def get_catalog(self, name, num, extension=1):
         """ """
-        subziff = self.create_singleimg_ziff(num)
-        return Catalog.load(self.prefix[num] + name + '.fits', ziff=subziff, name=name)
+        subziff = self.get_singleimg_ziff(num)
+        return Catalog.load(self.prefix[num] + name + '.fits', ziff=subziff, name=name,extension=extension)
 
+    def get_wcspointing(self):
+        """ """
+        inputfile = self.get_piff_inputfile()
+        wcs = inputfile.getWCS()
+        inputfile.setPointing('RA','DEC')
+        return wcs,inputfile.getPointing()
+    
     # --------- #
     #  PIFF     #
     # --------- #
@@ -337,24 +341,42 @@ class Ziff(object):
                     s._cat_kwargs['name'] = df.iloc[i].name
         return stars
 
-    def reflux_stars(self, stars, fit_center = False, which = 'minuit'):
+    def reflux_stars(self, stars, fit_center = False, which = 'minuit', show_progress=True):
         """ measure the flux and centroid (if allowed) of the star give the PSF.
         
 
         Parameters
         ----------
-            which : either 'minuit' or 'piff'
-            DOC
+        stars: [piff.Stars (list of)]
+        
+        fit_center: [bool] -optional-
+
+
+        which: [string] -optional-
+            how to fit for the reflux?
+        
+        show_progress: [bool] -optional-
+            Show progress bar (astropy.utils.console.ProgressBar)
 
         Returns
         -------
+        piff.Stars
         """
         if fit_center:
             self.psf.model._centered = True
         wcs, pointing = self.get_wcspointing()
         new_stars = []
+        if show_progress:
+            from astropy.utils.console import ProgressBar
+            from .utils import is_running_from_notebook
+            bar = ProgressBar( len(stars), ipython_widget=is_running_from_notebook() )
+        else:
+            bar = None
+            
         for (i,s) in enumerate(stars):
-            print(f"Processing {i+1}/{len(stars)}")
+            if bar is not None:
+                bar.update(i)
+                
             s.image.wcs = wcs[s.chipnum]
             s.run_hsm()
             new_s = self.psf.model.initialize(s)
@@ -365,15 +387,18 @@ class Ziff(object):
                 new_s = self.reflux_minuit(new_s, fit_center = fit_center)
             else:
                 new_s = self.psf.model.reflux(new_s, fit_center = fit_center)
+                
             new_s._cat_kwargs = s._cat_kwargs
             new_stars.append(new_s)
+
+        if bar is not None:
+            bar.update( len(stars) )
+
         self.psf.model._centered = False
         return new_stars
 
 
     #REFLUIX MINUIT
-    
-
     def reflux_minuit(self, star, fit_center=True):
         # Make sure input is properly normalized
         self.psf.model.normalize(star)
@@ -406,7 +431,9 @@ class Ziff(object):
             return chisq
         
         from iminuit import Minuit
-        m = Minuit(chi2,center_x = 0, center_y = 0, limit_center_x = (-3,3), limit_center_y = (-3,3), flux=1000,limit_flux = (1,None), fix_center_x = not fit_center, fix_center_y = not fit_center, print_level = 0,error_flux = 1, error_center_x = 0.01, error_center_y = 0.01, errordef = 1)
+        m = Minuit(chi2,center_x = 0, center_y = 0, limit_center_x = (-3,3), limit_center_y = (-3,3), flux=1000,limit_flux = (1,None),
+                       fix_center_x = not fit_center, fix_center_y = not fit_center,
+                       print_level = 0,error_flux = 1, error_center_x = 0.01, error_center_y = 0.01, errordef = 1)
         _ = m.migrad()  # run optimiser
         #print(m.values)
         
@@ -440,6 +467,7 @@ class Ziff(object):
             raise TypeError("catalog must be a name or a Catalog")
 
     def get_stacked_cat_df(self):
+        """ """        
         dfs = {}
         for cat in self.catalog:
             c = self.process_catalog_name(cat)
@@ -452,19 +480,23 @@ class Ziff(object):
         return dfs
     
     def save_all_cats(self, overwrite= True):
+        """ """        
         for cat in self.catalog:
             c = self.process_catalog_name(cat)
             self.save_catalog(c, self.prefix, overwrite = overwrite)
             
     def save_catalog(self, cat, prefix, overwrite):
+        """ """        
         for (c,p) in zip(cat,prefix):
             c.write_to(p + c.name + '.fits', overwrite = overwrite, filtered=True)
             
     def save_config(self, path):
+        """ """
         with open(path, 'w') as f:
             json.dump(self.config, f)
 
     def get_stars_cat_kwargs(self, stars):
+        """ """
         out = {}
         keys = stars[0]._cat_kwargs.keys()
         for k in keys:
@@ -475,6 +507,7 @@ class Ziff(object):
         return out
     
     def compute_shapes(self, stars, save=False, save_suffix = 'shapes'):
+        """ """
         shapes = {'instru_flux': [], 'T_data': [], 'T_model': [],
                       'g1_data': [],'g2_data': [],'g1_model': [],
                       'g2_model': [],'u': [],'v': [],
@@ -516,114 +549,121 @@ class Ziff(object):
             residuals.append(res)
         return np.stack(residuals)
 
-    def get_ztfimg(self):
-        """To use ztfimg from Rigault
-        """
-        from ztfimg import image
-        imgs = [image.ScienceImage(s,m) for (s,m) in zip(self._sciimg,self._mskimg)]
-        [img.load_source_background() for img in imgs]
-        return imgs
-    
-    def get_header(self):
-        """Get the header of the image
-        """
-        return [fits.open(s)[0].header for s in self._sciimg]
-    
+    # ---------------- #
+    #   DEPRECATED     #
+    # ---------------- #
+    def set_default_config(self):
+        """ Load the default configuration settings using default configuration file """
+        print("DEPRECATED, set_default_config -> load_default_config")
+        return self.load_default_config()
+
+    def set_mskimg(self, mskimg=None):
+        """ Set mskimg, or find one if it's None """
+        print("DEPRECATED, used set_images")
+        if mskimg is None:
+            self._mskimg = [None]*self.nimgs
+            for i,(s,p) in enumerate(zip(self._sciimg,self.prefix)):
+                if os.path.exists(p+'mskimg.fits'):
+                    self._mskimg[i] = p + 'mskimg.fits'
+        else:
+            self._mskimg = np.atleast_1d(mskimg)
+            assert(len(self._mskimg) == len(self._sciimg))
+
     def get_wcs(self):
         """Get the wcs solutin from the image header """
+        print("get_wcs  is DEPRECATED")
         return [WCS(h) for h in self.get_header()]
 
     def set_wcs(self):
+        """ """
+        print("set_wcs is DEPRECATED")        
         self._wcs = self.get_wcs()
 
     def get_mask_data(self):
         """ """
+        print("get_mask_data is  DEPRECATED")        
         return [fits.open(msk)[0].data for msk in self._mskimg]
     
     def set_mask(self, **kwargs):
         """ """
+        print("set_mask is  DEPRECATED")
         self._mask = [i.get_mask(**kwargs) for  i in self.get_ztfimg()]
-        
-    def get_wcspointing(self):
-        inputfile = self.get_piff_inputfile()
-        wcs = inputfile.getWCS()
-        inputfile.setPointing('RA','DEC')
-        return wcs,inputfile.getPointing()
 
-    def get_piff_inputfile(self):
-        inputfile = piff.InputFiles(self.config['i/o'], logger=self.logger)
-        inputfile.setPointing('RA','DEC')
-        return inputfile
-    
-    # ================ #
-    #   Properties     #
-    # ================ #
-    @property
-    def catalog(self):
-        """ Dictionnary of catalogs used by Piff"""
-        return self._catalog
-    
-    @property
-    def mask(self):
-        """ """
-        if not hasattr(self,"_mask"):
-            self.set_mask()
-        return self._mask
-    
-    @property
-    def ztfcat(self):
-        """ New name for psfcat of zTF pipeline """
-        return [p + 'psfcat.fits' for p in self.prefix]
+    def get_ztfimg(self):
+        """To use ztfimg from Rigault """
+        print(" get_ztfimg is DEPRECATED self.images ")
+        from ztfimg import image
+        imgs = [image.ScienceImage(s,m) for (s,m) in zip(self._sciimg,self._mskimg)]
+        [img.load_source_background() for img in imgs]
+        return imgs
 
-    @property
-    def prefix(self):
-        """ Prefix of the image. Useful for getting mskimg, psfcat etc. in the actual pipeline """
-        return self.get_prefix()
-    
-    @property
-    def wcs(self):
-        """ WCS solution """
-        if not hasattr(self,'_wcs'):
-            self.set_wcs()
-        return self._wcs
-
-    @property 
-    def shape(self):
-        """ Image shape """
-        return (3080, 3072)
-    
     @property
     def ra(self):
+        """ RA of the image.s center """
+        print("self.ra is DEPRECATED, use self.images[0].get_image_centroid(inpixel=False)[0]")
         if not hasattr(self, '_ra'):
-            self._ra = [wcs.pixel_to_world_values(*np.asarray([header['NAXIS1'], header['NAXIS2']])/2 + 0.5)[0]
-                            for (wcs,header) in zip(self.wcs,self.get_header())]
+            self._ra = [wcs_.pixel_to_world_values(*np.asarray([header_['NAXIS1'], header_['NAXIS2']])/2 + 0.5)[0]
+                        for (wcs_,header_) in zip(self.wcs,self.get_header())]
         return self._ra
     
     @property
     def dec(self):
+        """ Declination of the image.s center """
+        print("self.dec is DEPRECATED, use self.images[0].get_image_centroid(inpixel=False)[1]")
         if not hasattr(self, '_dec'):
-            self._dec = [wcs.pixel_to_world_values(*np.asarray([header['NAXIS1'], header['NAXIS2']])/2 + 0.5)[1]
-                             for (wcs,header) in zip(self.wcs,self.get_header())]
+            self._dec = [wcs_.pixel_to_world_values(*np.asarray([header_['NAXIS1'], header_['NAXIS2']])/2 + 0.5)[1]
+                         for (wcs_,header_) in zip(self.wcs,self.get_header())]
         return self._dec
-
+    
+    # ================ #
+    #   Properties     #
+    # ================ #
+    # - Images
     @property
-    def psf(self):
-        if not hasattr(self, '_psf'):
-            self.load_psf()
-        return self._psf
+    def images(self):
+        """ ztfimg.ZTFImage (or child of) """
+        if not hasattr(self, "_images"):
+            return None
+        return self._images
+
+    def has_images(self):
+        """ test if there are any images attached to this instance. """
+        return self.images is not None and len(self.images)>0
 
     @property
     def nimgs(self):
         """ Number of images used"""
-        return len(self._sciimg)
+        return len(self.images)
 
     @property
-    def ccd(self):
-        return [int(p.split('_')[-4][1::]) for p in self.prefix]
+    def _sciimg(self):
+        """ fullpath of the sciimg """
+        return [img_._filename for img_ in self.images]
+    
+    @property
+    def mask(self):
+        """ """
+        return [img_.get_mask() for img_ in self.images]
 
     @property
-    def quadrants(self):
-        return [int(p.split('_')[-2][1::]) for p in self.prefix]
+    def wcs(self):
+        """ """
+        return [img_.wcs for img_ in self.images]
+
+    @property
+    def ccdid(self):
+        """ ccd ID of the loaded images """
+        return [img_._ccdid for img_ in self.images]
+
+    @property
+    def qid(self):
+        """ quadran ID of the loaded images """
+        return [img_.qid for img in self.images]
+
+    @property
+    def rcid(self):
+        """ RC ID of the loaded images (quandrant ID and ccd ID) """
+        return [img_.rcid for img in self.images]
 
     @property
     def fracday(self):
@@ -632,6 +672,42 @@ class Ziff(object):
     @property
     def filter(self):
         return [p.split('_')[-5][1::] for p in self.prefix]
+
+    @property
+    def prefix(self):
+        """ Prefix of the image. Useful for getting mskimg, psfcat etc. in the actual pipeline """
+        return ['_'.join(s.split('_')[0:-1])+'_' for s in self._sciimg]
+
+    # - Logger
+    @property
+    def logger(self):
+        """ """
+        if not hasattr(self, "_logger"):
+            return self.set_logger(None)
+        self._logger
+
+    # - Catalogs
+    @property
+    def catalog(self):
+        """ Dictionnary of catalogs used by Piff"""
+        if not hasattr(self, "_catalog"):
+            self._catalog = {}
+            
+        return self._catalog
+
+    @property 
+    def shape(self):
+        """ ZTF quadrant umage shape (3080, 3072)"""
+        return (3080, 3072)
+
+    @property
+    def psf(self):
+        """ """
+        print("self.psf should not be in Ziff")
+        if not hasattr(self, '_psf'):
+            self.load_psf()
+        return self._psf
+
 
     
 ######################
@@ -700,9 +776,9 @@ class ZiffCollection( object ):
             print('{i+1}/{len(self.ziffs)}')
             try:
                 df = z.read_shapes()
-                df['ccd'] = z.ccd[0]
+                df['ccd'] = z.ccdid[0]
                 df['fracday'] = z.fracday[0]
-                df['quadrant'] = z.quadrants[0]
+                df['quadrant'] = z.qid[0]
                 df['MAGZP'] = z.get_header()[0]['MAGZP']
                 df['filter'] = z.filter[0]
                 dfs.append(df)
