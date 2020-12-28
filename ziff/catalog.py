@@ -339,7 +339,7 @@ class Catalog(object):
         return prefix+self.name+extension
         
     def build_sky_from_bkgdimg(self, bkgdimg, stampsize, askey="sky",
-                                   npfunc="nanmean", show_progress=True):
+                                   npfunc="nanmean"):
         """ build background entry based on bkgdimg given the stamp size.
         
         Parameters
@@ -357,11 +357,7 @@ class Catalog(object):
 
         npfunc: [string] -optional-
             Which numpy function should be used to go from a background stamp into a unique background ?
-            
-        show_progress: [bool] -optional-
-            Shall this display the ongoing progress bar ?
-
-        
+                    
         Returns
         -------
         None (set_skybackground())
@@ -371,35 +367,12 @@ class Catalog(object):
         if you have a ziff:
         self.build_sky_from_bkgdimg(ziff.get_background(), ziff.get_config_value("stamp_size", squeeze=True))
         """
-        rsize = stampsize/2
-        bkgdimg = np.asarray(bkgdimg)
-        if show_progress:
-            from astropy.utils.console import ProgressBar
-            from .utils import is_running_from_notebook
-            bar = ProgressBar( self.npoints, ipython_widget=is_running_from_notebook() )
-        else:
-            bar = None
-            
-        sky_ = np.ones( self.npoints )*np.NaN # nan by default
-        bkgd_shape = np.shape(bkgdimg)
-        # - Images to Catalog entry
-        for i_,(x, y) in enumerate(zip(self.get_xpos(filtered=False),
-                                       self.get_ypos(filtered=False))):
-
-            if bar is not None and not i_%(int(self.npoints/100)):
-                bar.update(i_)
-           
-            ssky_ = bkgdimg[int(x-rsize): int(x +rsize), int(y-rsize): int(y +rsize)]
-            if len(ssky_)>=0: # inside
-                sky_[i_] = getattr(np, npfunc)(ssky_)
-            
-        if bar is not None:
-            bar.update( self.npoints )
-            
+        skystamp = self.get_datastamps(bkgdimg, stampsize=stampsize, filtered=False)
+        sky = getattr(np,npfunc)(skystamp, axis=(1,2))
         # - Setting the sky
-        self.set_skybackground(sky_, askey=askey)
+        self.set_skybackground(sky, askey=askey)
     
-    def build_mask_from_maskimg(self, maskimg, stampsize, show_progress=True):
+    def build_mask_from_maskimg(self, maskimg, stampsize):
         """ build catalog mask based on maskimg given the stamp size.
         
         Parameters
@@ -421,30 +394,10 @@ class Catalog(object):
         if you have a ziff:
         self.build_mask_from_maskimg(ziff.mask, ziff.get_config_value("stamp_size", squeeze=True))
         """
-        rsize = stampsize/2
-        
-        if show_progress:
-            from astropy.utils.console import ProgressBar
-            from .utils import is_running_from_notebook
-            bar = ProgressBar( self.npoints, ipython_widget=is_running_from_notebook() )
-        else:
-            bar = None
-            
-        mask_ = np.zeros( self.npoints )
-        
-        for i_,(x, y) in enumerate(zip(self.get_xpos(filtered=False),
-                                       self.get_ypos(filtered=False))):
-            if bar is not None and not i_%(int(self.npoints/100)):
-                bar.update(i_)
-
-            smask_ = maskimg[int(x-rsize): int(x +rsize), int(y-rsize): int(y +rsize)]
-            if smask_.any() == True:
-                mask_[i_] = 1
-                
-        if bar is not None:
-            bar.update( self.npoints )
-            
-        self.set_mask( np.asarray(mask_, dtype="bool") )
+        maskstamp = np.asarray(self.get_datastamps(maskimg, stampsize=stampsize, filtered=False), dtype="bool")
+        maskout   = np.any(maskstamp, axis=(1,2))
+        # Setting the masks
+        self.set_mask( maskout )
 
         
     def load_xy_from_radec(self, update=True, overwrite=False, returns=False, wcs=None):
@@ -599,7 +552,7 @@ class Catalog(object):
         return serie_ if asserie else serie_.values
 
         
-    def get_ypos(self, compute=True, filtered=True, asserie=True,**kwargs):
+    def get_ypos(self, filtered=True, compute=True, asserie=True,**kwargs):
         """ Get the ccd y position column. This corresponds to images.data[x,y] not data.T[x,y]"""
         if self._yposkey is None:
             if compute:
@@ -610,6 +563,13 @@ class Catalog(object):
         serie_ = self.get_data(filtered=filtered, **kwargs)[self._yposkey]
         return serie_ if asserie else serie_.values
 
+    def get_datastamps(self, array, stampsize, filtered=False):
+        """ """
+        from ztfimg.stamps import stamp_it
+        return stamp_it(array, self.get_xpos(filtered=filtered), self.get_ypos(filtered=filtered),
+                        dx=stampsize, asarray=True)
+    
+        
     def get_config(self):
         """ returns the current configuration """
         config = {}
@@ -987,8 +947,7 @@ class CatalogCollection( Catalog ):
         unique_stamp = len(stampsize)==1
         
         out = [c.build_sky_from_bkgdimg(bkgdimg[0] if unique_bkgdimg else bkgdimg[i],
-                                        stampsize[0] if unique_stamp else stampsize[i],
-                                        show_progress=show_progress)
+                                        stampsize[0] if unique_stamp else stampsize[i])
                                       for i,c in enumerate(self.catalogs)
                 ]
     
@@ -996,8 +955,7 @@ class CatalogCollection( Catalog ):
             self._load_data_()
         return out
     
-    def build_mask_from_maskimg(self, maskimg, stampsize, show_progress=True,
-                                    update=True):
+    def build_mask_from_maskimg(self, maskimg, stampsize, update=True):
         """ """
         if len(np.shape(maskimg))==2:
             maskimg = [maskimg]
@@ -1007,8 +965,7 @@ class CatalogCollection( Catalog ):
         unique_stamp = len(stampsize)==1
         
         out =  [c.build_mask_from_maskimg(maskimg[0] if unique_masking else maskimg[i],
-                                          stampsize[0] if unique_stamp else stampsize[i],
-                                          show_progress=show_progress)
+                                          stampsize[0] if unique_stamp else stampsize[i])
                                     for i,c in enumerate(self.catalogs)
                 ]
         if update:
@@ -1075,6 +1032,7 @@ class CatalogCollection( Catalog ):
     # -------- #
     #  GETTER  #
     # -------- #
+
     def get_filtered(self, **kwargs):
         """ """
         filtered_cat = [cat.get_filtered(**kwargs) for cat in self.catalogs]
@@ -1124,6 +1082,7 @@ class CatalogCollection( Catalog ):
             
         return self.data.xs(index, level=level)
 
+    
     def get_config(self, first=True):
         """ returns the current configuration """
         config_list = self._call_down_("get_config", isfunc=True)

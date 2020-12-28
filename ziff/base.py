@@ -257,6 +257,52 @@ class _ZIFFImageHolder_( _ZIFFLogConfig_ ):
         
         return ['_'.join(s.split('_')[0:-1])+'_' for s in self._sciimg]
 
+    def get_imagedata(self, which="data", **kwargs):
+        """ high level method for accessing data, background or mask images.
+        See also: get_data(), get_background(), get_mask() for additional tools.
+
+        Parameters
+        ----------
+        which: [string] -optional-
+            which data do you want:
+               // using self.get_data()
+            - data: background subtracted images with NaN is masked pixels
+            - raw: data as given (no background subtraction, no pixel masked)
+            - rawmasked: data as given with NaN in masked pixel (= data+bkgd)
+               // using self.get_background()
+            - bkgd: background images
+               // using self.get_mask()
+            - mask: mask image (bool)
+            
+
+        **kwargs goes to the method used.
+        Returns
+        -------
+        2d image(s)
+        """
+        # data
+        if which in ["data"]:
+            return self.get_data(applymask=True, rmbkgd=True, **kwargs)
+
+        if which in ["raw"]:
+            return self.get_data(applymask=False, rmbkgd=False, **kwargs)
+
+        if which in ["rawmasked"]:
+            return self.get_data(applymask=True, rmbkgd=False, **kwargs)
+        
+        # background
+        if which in ["background", "bkgd"]:
+            return self.get_background(**kwargs)
+        
+        # mask
+        if which in ["mask", "bkgd"]:
+            return self.get_mask(**kwargs)
+        
+    def get_data(self, applymask=True, maskvalue=np.NaN, rmbkgd=True, whichbkgd="default"):
+        """ """
+        return self._read_images_property_("get_data", isfunc=True,
+                                               applymask=applymask,
+                                            maskvalue=maskvalue, rmbkgd=rmbkgd, whichbkgd=whichbkgd)
     def get_mask(self, **kwargs):
         """ 
         **kwargs goes to ztfimg's image{s}.get_mask().
@@ -400,7 +446,7 @@ class _ZIFFImageHolder_( _ZIFFLogConfig_ ):
 
 class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
     
-    def __init__ (self, sciimg=None, mskimg=None,
+    def __init__(self, sciimg=None, mskimg=None,
                       logger=None, catalog=None,
                       config="default", download=True):
         """Wrapper of PIFF for ZTF 
@@ -490,6 +536,80 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
             return catalog_
         
         self.set_catalog(catalog_, name=name)
+
+    # ------- #
+    # GETTER  #
+    # ------- #
+    def get_stamp(self, catalog, which="data", filtered=True, **kwargs):
+        """ 
+        Parameters
+        ----------
+        catalog: [string/catalog]
+            catalog to be used to fetch xpos and ypos.
+        
+        which: [string] -optional-
+            which data do you want:
+               // using self.get_data()
+            - data: background subtracted images with NaN is masked pixels
+            - raw: data as given (no background subtraction, no pixel masked)
+            - rawmasked: data as given with NaN in masked pixel (= data+bkgd)
+               // using self.get_background()
+            - bkgd: background images
+               // using self.get_mask()
+            - mask: mask image (bool)
+        """
+        return self._get_single_stamp_(catalog, which=which, filtered=filtered, **kwargs)
+            
+    def _get_single_stamp_(self, catalog, which="data", filtered=True, **kwargs):
+        """ """
+        cat = self.get_catalog(catalog)
+        return cat.get_datastamps(self.get_imagedata(which=which, **kwargs),
+                                      self.get_config_value("stamp_size"), filtered=filtered)
+
+    # ------- #
+    # PLOTTER #
+    # ------- #
+    def show_stamps(self, catalog, nstamps=9, ncol=3, indexes=None, which="data", filtered=True, 
+                noticks=True, ssize=2.5, tight_layout=True, cmap="cividis", sort=True, **kwargs):
+        """ """
+        import matplotlib.pyplot as mpl
+    
+        stamps = self.get_stamp(catalog, which=which, filtered=filtered)
+        if indexes is None:
+            indexes = np.random.choice(np.arange(np.shape(stamps)[0]), nstamps)
+        else:
+            nstamps = len(indexes)
+
+        if sort:
+            indexes = np.sort(indexes)
+            
+        nrow = int(np.ceil(nstamps/ncol))
+        fig = mpl.figure(figsize=[ssize*ncol,ssize*nrow])
+        prop = dict(origin="lower")
+    
+        # 
+        stamps_toshow = stamps[indexes]
+        cat = self.get_catalog(catalog)
+        catdata = cat.get_data(filtered=filtered).iloc[indexes]
+        #
+        
+        for i, stamp_ in enumerate(stamps_toshow):
+            ax = fig.add_subplot(nrow, ncol, i+1)
+            ax.imshow(stamp_, cmap=cmap, **{**prop, **kwargs})
+            info = f"({catdata.iloc[i]['xpos']:.1f},{catdata.iloc[i]['ypos']:.1f}) | {catdata.iloc[i]['Gmag']:.1f} mag"
+            info += "\n"+ f" f-out: {catdata.iloc[i]['filterout']}"
+            ax.text(0.05,0.95, info, color="w", weight="bold", 
+                        transform=ax.transAxes, fontsize="x-small",
+                        va="top", ha="left")
+            ax.set_title(indexes[i])
+            if noticks:
+                ax.set_xticks([])
+                ax.set_yticks([])
+                
+        if tight_layout:
+            fig.tight_layout()
+            
+        return fig, indexes
     # ------- #
     # PIFF    #
     # ------- #
