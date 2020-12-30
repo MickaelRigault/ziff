@@ -75,6 +75,14 @@ class _ZIFFLogConfig_( object ):
             to_eval = 'config' + ''.join([f"['{k}']" for k in kp]) + f" = '{value}'"
         exec(to_eval,{'config':self.config})
 
+    def set_stampsize(self, stampsize):
+        """ Size of the stamps used for the PSFF psf fit """
+        self.set_config_value('i/o,stamp_size', int(stampsize))
+
+    def set_nstars(self, nstars):
+        """ Number of stars used for the PIFF psf fit. """
+        self.set_config_value('i/o,nstars', int(nstars))
+
     # -------- #
     #  GETTER  #
     # -------- #
@@ -560,11 +568,12 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         """
         return self._get_single_stamp_(catalog, which=which, filtered=filtered, **kwargs)
             
-    def _get_single_stamp_(self, catalog, which="data", filtered=True, **kwargs):
+    def _get_single_stamp_(self, catalog, which="data", filtered=True, xyformat="numpy", **kwargs):
         """ """
         cat = self.get_catalog(catalog)
         return cat.get_datastamps(self.get_imagedata(which=which, **kwargs),
-                                      self.get_config_value("stamp_size"), filtered=filtered)
+                                      self.get_config_value("stamp_size"), filtered=filtered,
+                                      xyformat=xyformat)
 
     # ------- #
     # PLOTTER #
@@ -576,7 +585,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
     
         stamps = self.get_stamp(catalog, which=which, filtered=filtered)
         if indexes is None:
-            indexes = np.random.choice(np.arange(np.shape(stamps)[0]), nstamps)
+            indexes = np.random.choice(np.arange(np.shape(stamps)[0]), nstamps, replace=False)
         else:
             nstamps = len(indexes)
 
@@ -610,12 +619,17 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
             fig.tight_layout()
             
         return fig, indexes
+    
     # ------- #
     # PIFF    #
     # ------- #
     def catalog_to_stars(self, catalog, fileout=None, append_df_keys = None, **kwargs):
         """ """
-        cat, catfile = self._get_stored_catalog_(catalog, fileout, **kwargs)
+        # Fortan format requested as PIFF expect x_col, y_col ccd-positions in fortran/FITS format
+        # starting at (1,1) and not numpy/matplotlib (0,0) default in ZIFF.
+        # This centeres the stars created by makeStar
+        cat, catfile = self._get_stored_catalog_(catalog, fileout, **{**{"xyformat":"fortran"},**kwargs})
+        print(catfile)
         inputfile = self.get_piff_inputfile(catfile=catfile)
         stars = inputfile.makeStars(logger=self.logger)
         
@@ -623,12 +637,14 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
             s._cat_kwargs = {}
             
         if append_df_keys is not None:
-            append_df_keys = np.atleast_1d(append_df_keys)
-            df = self.get_stacked_cat_df()[catalog]
-            for (i,s) in enumerate(stars):
-                for key in append_df_keys:
-                    s._cat_kwargs[key] = df.iloc[i][key]
-                    s._cat_kwargs['name'] = df.iloc[i].name
+            print("append_df_keys | Not implemented | commented out.")
+            #append_df_keys = np.atleast_1d(append_df_keys)
+            #df = self.get_stacked_cat_df()[catalog]
+            #for (i,s) in enumerate(stars):
+            #    for key in append_df_keys:
+            #        s._cat_kwargs[key] = df.iloc[i][key]
+            #        s._cat_kwargs['name'] = df.iloc[i].name
+            
         return stars
 
     def reflux_stars(self, stars, fit_center = False, which = 'piff', show_progress=True):

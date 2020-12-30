@@ -96,11 +96,34 @@ def fetch_gaia_catalog(ra, dec, radius= 0.75, r_unit="deg",column_filters={'Gmag
 
 def dataframe_to_hdu(dataframe):
     """ converts a dataframe into a fits.BinTableHDU """
+    # L: Logical (Boolean)
+    # B: Unsigned Byte
+    # I: 16-bit Integer
+    # J: 32-bit Integer
+    # K: 64-bit Integer
+    # E: Single-precision Floating Point
+    # D: Double-precision Floating Point
+    # C: Single-precision Complex
+    # M: Double-precision Complex
+    # A: Character
+    
     cols = []
-    df = dataframe.reset_index()            
+    df = dataframe.reset_index()
     for _key in df.keys():
-        format = 'K' if df[_key].dtype == 'int' else 'D'
-        cols.append(fits.Column(name = _key, array = df[_key], format = format, ascii = False))
+        type_ = df[_key].dtype
+        if type_ in ['int','int64',"Int64"]:
+            format = 'K'
+            value = df[_key].astype('int')
+        elif type_ == 'float':
+            format = 'D'
+            value = df[_key].astype('float')
+        elif type_ in ['bool', 'boolean']:
+            format = 'L'
+            value = df[_key].astype('bool')
+        else:
+            raise NotImplementedError(f"column type {type_} conversion to fits format not implemented")
+        
+        cols.append(fits.Column(name=_key, array=value, format=format, ascii=False))
             
     return fits.BinTableHDU.from_columns(cols)
 
@@ -112,7 +135,8 @@ def dataframe_to_hdu(dataframe):
 ######################
 class Catalog(object):
     
-    def __init__(self, dataframe=None, name=None, wcs=None, header=None, mask=None):
+    def __init__(self, dataframe=None, name=None, wcs=None, header=None, mask=None,
+                     xyformat=None):
         """ """
         self._name = name
         self._filters = {}
@@ -128,7 +152,9 @@ class Catalog(object):
 
         if mask is not None:
             self.set_mask(mask)
-        
+
+        self._xyformat = xyformat
+            
     def __str__(self):
         """ printing method """
         out = "{} object \n".format(self.__class__.__name__)
@@ -290,7 +316,10 @@ class Catalog(object):
 
         # reshaped:
         self._data = pandas.DataFrame(dataframe.values.byteswap().newbyteorder(),
-                                      index=dataframe.index, columns=dataframe.columns)
+                                      index=dataframe.index, columns=dataframe.columns
+                                     ).convert_dtypes() # fixes object dtype issues
+                                     
+        self._data.astype(self._data.dtypes.replace('Int64','int64')) # avoids warnings
         
         if 'filterout' not in self._data.columns:
             self._data['filterout'] = False
@@ -323,14 +352,6 @@ class Catalog(object):
     # -------- #
     #  LOADER  #
     # -------- #
-    def set_sky(self, bkgdimg):
-        """ """
-        print("DEPRECATED")
-        shape= np.shape(bkgdimg)
-        sky =bkgdimg[np.clip(self.ypos,0,shape[0]-1).astype(int),
-                     np.clip(self.xpos,0,shape[1]-1).astype(int)]
-        self.data['sky'] =  sky
-
     def build_filename(self, prefix="", extension=".fits"):
         """ returns prefix+self.name+extension """
         if not extension.startswith("."):
@@ -399,7 +420,6 @@ class Catalog(object):
         # Setting the masks
         self.set_mask( maskout )
 
-        
     def load_xy_from_radec(self, update=True, overwrite=False, returns=False, wcs=None):
         """ computes the x and y position given the wcs solution and the radec values. 
         Store them as xpos and ypos in the current catalog if needed or requested.
@@ -463,7 +483,7 @@ class Catalog(object):
             wcs = self.wcs
             
         ra, dec = np.asarray( wcs.pixel_to_world_values(self.get_xpos(filtered=False),
-                                                            self.get_ypos(filtered=False))
+                                                        self.get_ypos(filtered=False))
                             )
         if update:
             if 'ra' not in self.data.keys() or overwrite:
@@ -473,6 +493,40 @@ class Catalog(object):
         if returns:
             return ra,dec
 
+    def _guess_xyformat_(self):
+        """ """
+        # not yet RA/Dec or XPOS/YPOS, setting numpy as default
+        if not self._xposkey in self.data or not self._rakey in self.data:
+            self._xyformat = "numpy"
+        # aldeady one, let's see which
+        else:
+            np_xpos, np_ypos = self.wcs.world_to_pixel_values(self.get_ra(filtered=False),
+                                                       self.get_dec(filtered=False))
+            shift = np.unique(self.data[self._xposkey] - np_xpos)
+            
+            if len(shift)>1:
+                raise ValueError("non constant offset when guessing the xyformat. This unexpected.")
+            if int(shift[0])==0:
+                self._xyformat = "numpy"
+            elif int(shift[0])==1: # to be checked.
+                self._xyformat = "fortran"
+            else:
+                raise ValueError("non 0 or 1 origin when guessung the xyformat. This unexpected.")
+            
+    def _get_xyorigin_(self, xyformat):
+        """ """
+        if xyformat not in ["numpy", "matplotlib", "fortran", "fits"]:
+            raise ValueError("xyformat can only be (numpy, matplotlib ; origin=0) or (fortran, fits; origin=1 )")
+
+        if self.xyformat == "numpy" and xyformat in ["numpy", "matplotlib"] or \
+           self.xyformat == "fortran" and xyformat in ["fortran", "fits"]:
+            origin=0
+        elif self.xyformat == "numpy" and xyformat in ["fortran", "fits"]:
+            origin=-1
+        elif self.xyformat == "fortran" and xyformat in ["numpy", "matplotlib"]:
+            origin=1
+            
+        return origin
     # -------- #
     #  GETTER  #
     # -------- #
@@ -488,6 +542,21 @@ class Catalog(object):
                               wcs=self.wcs, header=self.header,
                               mask=self.mask[~self.filterout],
                               **kwargs)
+
+    def get_as_xyformat(self, xyformat, filtered=False, **kwargs):
+        """ """
+        data = self.get_data(filtered=filtered).copy()
+        origin = self._get_xyorigin_(xyformat)
+        if origin != 0:
+            data[self._xposkey] -= origin
+            data[self._yposkey] -= origin
+
+        return self.__class__( dataframe=data,
+                               name=f"{xyformat}format_"+ ("filtered_" if filtered else "") +self.name,
+                               wcs=self.wcs, header=self.header,
+                               mask=self.mask[~self.filterout] if filtered else self.mask,
+                               xyformat=xyformat,
+                               **kwargs)
         
     def get_data(self, filtered=False, as_hdu=False):
         """ Basis of the catalog class. 
@@ -537,9 +606,8 @@ class Catalog(object):
 
         serie_ = self.get_data(filtered=filtered, **kwargs)[self._deckey]
         return serie_ if asserie else serie_.values
-
     
-    def get_xpos(self, filtered=True, compute=True, asserie=True,**kwargs):
+    def get_xpos(self, filtered=True, compute=True, asserie=True, xyformat="numpy", **kwargs):
         """ Get the ccd x position column. This corresponds to images.data[x,y] not data.T[x,y]"""
         # If in keys, used keys
         if self._xposkey is None:
@@ -547,26 +615,29 @@ class Catalog(object):
                 self.load_xy_from_radec(update=True, returns=False)
             else:
                 return None
-        
-        serie_ = self.get_data(filtered=filtered, **kwargs)[self._xposkey]
+            
+        origin = self._get_xyorigin_(xyformat)
+        serie_ = self.get_data(filtered=filtered, **kwargs)[self._xposkey]-origin
         return serie_ if asserie else serie_.values
 
-        
-    def get_ypos(self, filtered=True, compute=True, asserie=True,**kwargs):
+    def get_ypos(self, filtered=True, compute=True, asserie=True, xyformat="numpy", **kwargs):
         """ Get the ccd y position column. This corresponds to images.data[x,y] not data.T[x,y]"""
         if self._yposkey is None:
             if compute:
                 self.load_xy_from_radec(update=True, returns=False)
             else:
                 return None
-        
-        serie_ = self.get_data(filtered=filtered, **kwargs)[self._yposkey]
+            
+        origin = self._get_xyorigin_(xyformat)
+        serie_ = self.get_data(filtered=filtered, **kwargs)[self._yposkey]-origin
         return serie_ if asserie else serie_.values
 
-    def get_datastamps(self, array, stampsize, filtered=False):
+    def get_datastamps(self, array, stampsize, filtered=False, xyformat="numpy"):
         """ """
         from ztfimg.stamps import stamp_it
-        return stamp_it(array, self.get_xpos(filtered=filtered), self.get_ypos(filtered=filtered),
+        return stamp_it(array,
+                            self.get_xpos(filtered=filtered, xyformat=xyformat),
+                            self.get_ypos(filtered=filtered, xyformat=xyformat),
                         dx=stampsize, asarray=True)
     
         
@@ -748,10 +819,19 @@ class Catalog(object):
     @property
     def filtered_iindex(self):
         return np.where( self.filterout )[0]
-    
+
+    @property
+    def xyformat(self):
+        """ format for the x,y origin (0: numpy/matplotlib ; 1: fortran/FITS) """
+        if not hasattr(self,"_xyformat") or self._xyformat is None:
+            self._guess_xyformat_()
+            
+        return self._xyformat
+        
     @property
     def xpos(self):
         """ x ccd position, shortcut of self.get_xpos()"""
+        print("xpos DEPRECATED, use self.get_xpos()")
         return self.get_xpos()
 
     @property
@@ -763,7 +843,8 @@ class Catalog(object):
 
     @property
     def ypos(self):
-        """ y ccd position, shortcut of self.get_ypos()"""        
+        """ y ccd position, shortcut of self.get_ypos()"""
+        print("ypos DEPRECATED, use self.get_ypos()")
         return self.get_ypos()
 
     @property
@@ -1237,9 +1318,15 @@ class _CatalogHolder_( object ):
         return catalog
         
     def _get_stored_catalog_(self, catalog, idx=None, fileout=None,
+                                 xyformat=None,
                                  overwrite=True, filtered=True):
         """ """
         cat = self.get_catalog(catalog, idx=idx)
+        
+        if xyformat is not None and xyformat != cat.xyformat:
+            print(f"requesting {xyformat} format")
+            cat = cat.get_as_xyformat(xyformat, filtered=False)
+            
         if fileout is None:
             fileout = cat.build_filename("tmpcat_", extension=".fits")
             
