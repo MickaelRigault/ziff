@@ -1304,32 +1304,36 @@ class _CatalogHolder_( object ):
     # -------- #
     #  GETTER  #
     # -------- #
-    def get_catalog(self, catalog, idx=None):
+    def get_catalog(self, catalog, idx=None, xyformat=None):
         """ Eval if catalog is a name or an object. Returns the object """
         #
         # A bit messy but clean the issue of list of catalog if any.
         #
         if isinstance(catalog, str):
             if len( np.atleast_1d(self.catalog[catalog]) )==1 or idx is None:
-                return self.catalog[catalog]
+                catalog = self.catalog[catalog]
             else:
-                return self.catalog[catalog].catalogs[idx]
-        
+                catalog = self.catalog[catalog].catalogs[idx]
+
+        if xyformat is not None and xyformat != catalog.xyformat:
+            print(f"requesting {xyformat} format")
+            catalog = catalog.get_as_xyformat(xyformat, filtered=False)
+
         return catalog
         
     def _get_stored_catalog_(self, catalog, idx=None, fileout=None,
                                  xyformat=None,
                                  overwrite=True, filtered=True):
         """ """
-        cat = self.get_catalog(catalog, idx=idx)
-        
-        if xyformat is not None and xyformat != cat.xyformat:
-            print(f"requesting {xyformat} format")
-            cat = cat.get_as_xyformat(xyformat, filtered=False)
-            
-        if fileout is None:
+        cat = self.get_catalog(catalog, idx=idx, xyformat=xyformat)
+
+        if fileout is None or fileout in ["default"]:
+            fileout = cat.build_filename(self.prefix)
+        elif fileout in ["tmp"]:
             fileout = cat.build_filename("tmpcat_", extension=".fits")
             
+        #else -> fileout = fileout
+        
         cat.write_to(fileout, overwrite=overwrite, filtered=filtered)
         return cat, fileout
     

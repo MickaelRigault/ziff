@@ -28,7 +28,7 @@ __adv__ = 'setupy.py'
 from distutils.core import setup
 
 setup(name='Ziff',
-      version='1.0',
+      version='0.2.0',
       description='Piff for ZTF',
       author='Romain Graziani',
       author_email='romain.graziani@clermont.in2p3.fr',

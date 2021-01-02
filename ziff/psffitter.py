@@ -45,31 +45,11 @@ class ZIFFFitter( ZIFF ):
     # ================ #
     #   Methods        #
     # ================ #
-    def set_fitcatalog(self, catalog, fileout=None,
-                           update_config=True, store=True,
-                           overwrite=True, filtered=True,
-                           extension="fits", catprop={}, redownload=False):
-        """ """
-        if type(catalog) is str and catalog in ["default", "gaia_calibration"]:
-            catalog = "gaia_calibration"
-            if catalog not in self.catalog or redownload:
-                self.fetch_calibration_catalog(name=catalog, **catprop)
-            
-        self._fitcatalog = self.get_catalog(catalog)
-        if fileout is None:
-            fileout = self.fitcatalog.build_filename(self.prefix)
-
-        self.fitcatalog.write_to(fileout, overwrite=overwrite, filtered=filtered)
-        
-        if update_config:
-            self.config['i/o']['cat_file_name'] = fileout
-            self.config['calibration_cat'] = self.fitcatalog.get_config()
-                
     # --------- #
     #  PIFF     #
     # --------- #
     def run_piff(self, catalog="default", catfileout=None, overwrite_cat=True,
-                     fitcatprop={},
+                     fitcatprop={}, 
                      on_filtered_cat=True,
                      save_suffix='output.piff'):
         """ run the piff PSF algorithm on the given images using 
@@ -79,22 +59,35 @@ class ZIFFFitter( ZIFF ):
         ----------
         catalog
         """
-        self.set_fitcatalog(catalog, store=True, update_config=True,
-                            fileout=catfileout, filtered=on_filtered_cat,
-                            overwrite=overwrite_cat)
-        
-        # - Create the PIFF input file
-        inputfile = self.get_piff_inputfile()
-        # Piff stars
-        stars = inputfile.makeStars()
-        wcs, pointing = self.get_wcspointing()
+        # 0.
+        # - parse the input catalog
+        if type(catalog) is str and catalog in ["default", "gaia_calibration"]:
+            catalog = "gaia_calibration"
+            if catalog not in self.catalog:
+                self.fetch_calibration_catalog(name=catalog, **fitcatprop)
 
+        # 1.
+        # - Create the piff stars
+        stars, (fitcat, inputfile) = self.get_stars(catalog, fileout="default",
+                                                    filtered=on_filtered_cat,
+                                                    update_config=True,
+                                                    fullreturn=True)
+        # - and record the information
+        self._fitcatalog = fitcat
+        self.config['calibration_cat'] = self.fitcatalog.get_config()
+
+        # 2.
+        # - Build the PSF object 
         psf = piff.SimplePSF.process(self.config['psf'])
+        wcs, pointing = self.get_wcspointing(inputfile=inputfile)
+        # - and fit the PSF
         psf.fit(stars, wcs, pointing, logger=self.logger)
         
+        # 3.
+        # - Store the results
         [psf.write(p + save_suffix) for p in self.get_prefix()]
         [self.save_config(p + 'piff_config.json') for p in self.get_prefix()]
-
+        # - save on the current object.
         self.set_psf(psf)
 
     # -------- #
@@ -212,6 +205,7 @@ class ZIFFFitter( ZIFF ):
         shapes = {**shapes, **get_stars_cat_kwargs(stars)}
         if save:
             [np.savez(p + save_suffix,**shapes) for p in self.get_prefix()]
+            
         return shapes
 
     def compute_residuals(self, stars, normed = True, sky = 100):

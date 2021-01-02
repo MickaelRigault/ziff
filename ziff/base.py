@@ -86,21 +86,35 @@ class _ZIFFLogConfig_( object ):
     # -------- #
     #  GETTER  #
     # -------- #
-    def get_piff_inputfile(self, catfile=None):
-        """ get the PIFF input file given your logger and configurations """
-        if catfile is not None:
-            self.config['i/o']['cat_file_name'] = list(np.atleast_1d(catfile))
+    def get_piff_inputfile(self, catfile=None, ioconfig=None, verbose=True):
+        """ get the PIFF input file given your logger and configurations 
+        
+        ioconfig: [dict]  -optional-
+            dictionary containing the input information for piff.
+            as in self.config['i/o']
+        
+        """
+        if ioconfig is None:
+            ioconfig = self.config['i/o']
             
-        inputfile = piff.InputFiles(self.config['i/o'], logger=self.logger)
+        if catfile is not None:
+            ioconfig['cat_file_name'] = list(np.atleast_1d(catfile))
+            
+        if verbose:
+            print(ioconfig)
+            
+        inputfile = piff.InputFiles(ioconfig, logger=self.logger)
         inputfile.setPointing('RA','DEC')
         return inputfile
 
-    def get_wcspointing(self):
+    def get_wcspointing(self, inputfile=None):
         """ """
-        inputfile = self.get_piff_inputfile()
+        if inputfile is None:
+            inputfile = self.get_piff_inputfile()
+            
         wcs = inputfile.getWCS()
         inputfile.setPointing('RA','DEC')
-        return wcs,inputfile.getPointing()
+        return wcs, inputfile.getPointing()
 
     def get_config_value(self, key, squeeze=True):
         """ get a config value (value.s or dict) 
@@ -135,7 +149,8 @@ class _ZIFFLogConfig_( object ):
                 return value[0]
             if len(value)==0:
                 return None
-        return value        
+        return value
+    
     # ================ #
     #   Properties     #
     # ================ #
@@ -548,6 +563,35 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
     # ------- #
     # GETTER  #
     # ------- #
+    def eval_psf(self, xpos, ypos, chipnum=0, flux=1.0, offset=(0, 0),
+                    stamp_size=None, image=None, informat="numpy",
+                    asarray=True,**kwargs):
+        """ """
+        if not self.has_psf():
+            raise AttributeError("No PSF loaded.")
+        
+        if stamp_size is None:
+            stamp_size = self.get_config_value("stamp_size")
+
+        # not really important as the PSF is not varying that fast.
+        formatoffset = -1 if informat is "numpy" else 0
+            
+        galsimimg = self.psf.draw(xpos-formatoffset, ypos-formatoffset,
+                                      stamp_size=stamp_size,
+                                      chipnum=chipnum,
+                                      flux=flux, offset=offset, image=image)
+        if asarray:
+            return galsimimg.array
+        
+        return galsimimg
+
+    def get_psf(self, catalog, chipnum=0, flux=1.0, iloc=None, **kwargs):
+        """ """
+        cat = self.get_catalog(catalog, idx=chipnum)
+        xpos, ypos = cat.get_data()[["xpos","ypos"]] if iloc is None else cat.get_data().iloc[iloc][["xpos","ypos"]]
+        return [eval_psf(xpos_, ypos_, chipnum=chipnum, flux=flux, **kwargs)
+                    for xpos_, ypos_ in zip(xpos, ypos) ]
+    
     def get_stamp(self, catalog, which="data", filtered=True, **kwargs):
         """ 
         Parameters
@@ -575,6 +619,135 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
                                       self.get_config_value("stamp_size"), filtered=filtered,
                                       xyformat=xyformat)
 
+    def get_stars(self, catalog, fileout="tmp", fullreturn=False,
+                      update_config=False,
+                      filtered=True, **kwargs):
+        """ return PIFF stars for the given catalog using get_piff_inputfile().makeStars() 
+
+        Parameters
+        ----------
+
+        fileout: [string or None] -optional-
+            how should the catalog file be stored to be passed to piff ?
+            - 'tmp': temporary name: tmp_`bla`
+            - None or 'default': using the cat.build_filename(prefix) method
+            - rest: considered as the actuel filename.
+
+        fullreturn: [bool] -optional-
+            returns the catalog and the piff inputfile in addition to the stars 
+            (stars, cat)
+
+        Returns
+        -------
+        piff.Stars or piff.Stars, (catalog, inputfile)
+        """
+        # 1.
+        # - parse catalog
+        cat, catfile = self._get_stored_catalog_(catalog, fileout=fileout, filtered=filtered,
+                                                **{**{"xyformat":"fortran"},**kwargs})
+        # 2.
+        # - build the piff input file using a copy of the i/o config
+        if not update_config:
+            ioconfig = self.get_config_value("i/o").copy()
+        else:
+            ioconfig = self.get_config_value("i/o")
+            
+        ioconfig['cat_file_name'] = list(np.atleast_1d(catfile))
+
+        inputfile = self.get_piff_inputfile(ioconfig=ioconfig)
+
+        # 3.
+        # - build stars from the inputfil
+        stars = inputfile.makeStars(logger=self.logger)
+        
+        if not fullreturn:
+            return stars
+
+        return stars, (cat, inputfile)
+    
+    # ------- #
+    # FITTER  #
+    # ------- #
+    def get_star_psfmodel(self, stars, normed=False, asarray=False):
+        """
+        Parameters
+        ----------
+        
+        Returns
+        -------
+        2d array or piff.Star
+        """
+        #
+        # - Multiple Case, simply loop.
+        if len(np.atleast_1d(stars))>1:
+            return [self.get_star_psfmodel(star_) for star_ in stars]
+
+        #
+        # - Single Case
+        star = np.atleast_1d(stars)[0]
+        if not normed:
+            target_star = self.psf.interpolateStar(self.psf.model.initialize( star ))
+            new_star = self.psf.model.draw( target_star )
+        else:
+            new_star = self.psf.drawStar( star )
+            
+        return new_star.image.array if asarray else new_star
+
+    def get_psfmodel(self, catalog, filtered=True, normed=False):
+        """ """
+        stars = self.get_stars(catalog, fileout="tmp",
+                               filtered=filtered, update_config=False,
+                               fullreturn=False)
+        
+        return self.get_star_psfmodel(stars, normed=normed)
+    
+    def fit_psfflux(self, catalog, filtered=True, fit_center=False, show_progress=True):
+        """ """
+        print("NOT SURE WHY, BUT DOES NOT SEEM TO WORK, see get_psfmodel")
+        
+        stars, (fitcat, inputfile) = self.get_stars(catalog, fileout="tmp",
+                                                    filtered=filtered,
+                                                    update_config=False,
+                                                    fullreturn=True)
+        
+        wcs, pointing = self.get_wcspointing(inputfile=inputfile)
+        
+        #
+        # - Setting the progress bar
+        if show_progress:
+            from astropy.utils.console import ProgressBar
+            from .utils import is_running_from_notebook
+            bar = ProgressBar( len(stars), ipython_widget=is_running_from_notebook() )
+        else:
+            bar = None
+        # -
+        #
+
+        #
+        # - loop over the stars
+        new_stars = []
+        for (i, star_) in enumerate(stars):
+            if bar is not None:
+                bar.update(i)
+                
+            #s.image.wcs = wcs[s.chipnum]
+            #s.run_hsm()
+            new_s = self.psf.interpolateStar( self.psf.model.initialize(star_) )
+#            new_s.fit.flux = star_.run_hsm()[0]
+#            new_s.fit.center = (0,0)
+            #new_s = self.psf.model.reflux(new_s, fit_center=fit_center)
+            new_stars.append(new_s)
+
+        if bar is not None:
+            bar.update( len(stars) )
+
+        # - Loop over
+        #
+        
+        return new_stars, stars
+        
+        
+    
     # ------- #
     # PLOTTER #
     # ------- #
@@ -628,10 +801,8 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         # Fortan format requested as PIFF expect x_col, y_col ccd-positions in fortran/FITS format
         # starting at (1,1) and not numpy/matplotlib (0,0) default in ZIFF.
         # This centeres the stars created by makeStar
-        cat, catfile = self._get_stored_catalog_(catalog, fileout, **{**{"xyformat":"fortran"},**kwargs})
-        print(catfile)
-        inputfile = self.get_piff_inputfile(catfile=catfile)
-        stars = inputfile.makeStars(logger=self.logger)
+        print("DEPRECATED catalog_to_stars is deprecated, use get_stars()")
+        stars = self.get_stars(catalog, fileout=None, **kwargs)
         
         for s in stars:
             s._cat_kwargs = {}
