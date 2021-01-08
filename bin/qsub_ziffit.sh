@@ -20,9 +20,6 @@
 # RUNNING THE CODE
 
 
-cat ${1} | while read line
-do
-    echo(${line})
+for i in $(cat $1); do
+    echo "tester: $i"
 done
-		 
-
