@@ -19,7 +19,7 @@ setup(name='Ziff',
       url='https://github.com/MickaelRigault/Ziff',
       packages=['ziff'],
       package_data={'ziff': ['data/*']},
-      scripts=["bin/ziffit.py"]
+      scripts=["bin/ziffit.py","bin/qsub_ziffit.sh"]
     #['ziff/scripts/run_ccd.py','ziff/scripts/download_query.py','ziff/scripts/download_target.py']
      )
 # End of setupy.py ========================================================
