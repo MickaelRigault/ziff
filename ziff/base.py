@@ -570,7 +570,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
 
     def fetch_catalog(self, which="gaia", name=None, setit=True,
                           setsky=True, setwcs=True, setmask=True,
-                          add_boundfilter=True, bound_padding=30,
+                          add_boundfilter=True, bound_padding=50,
                           isolationlimit=None,
                           **kwargs):
         """ **kwargs goes to catalog.fetch_ziff_catalog() """
@@ -614,7 +614,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
     def fetch_ps1cal_catalog(self, setit=True,
                                  name="ps1cal",
                                  setsky=True, setwcs=True, setmask=True,
-                                 add_boundfilter=True, bound_padding=30,
+                                 add_boundfilter=True, bound_padding=50,
                                  isolationlimit=None,
                                  gmag_range=None, rmag_range=None,
                                  imag_range=None, zmag_range=None,
@@ -650,7 +650,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
 
     def _enrich_cat_(self, catalog_, name=None,
                          setsky=True, setwcs=True, setmask=True,
-                         add_boundfilter=True, bound_padding=30,
+                         add_boundfilter=True, bound_padding=50,
                          isolationlimit=None):
         """ """
         if catalog_.name is None:

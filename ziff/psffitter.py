@@ -114,7 +114,7 @@ class ZIFFFitter( ZIFF ):
                                        rpmag_range=None,
                                        bpmag_range=None,
                                        colormag_range=None,
-                                       bound_padding=30, 
+                                       bound_padding=50, 
                                        seplimit=8, **kwargs):
         """ """
         self.fetch_gaia_catalog(gmag_range=gmag_range,
@@ -130,7 +130,7 @@ class ZIFFFitter( ZIFF ):
                                        rpmag_range=None,
                                        bpmag_range=None,
                                        colormag_range=None,
-                                       bound_padding=30, 
+                                       bound_padding=50, 
                                        seplimit=3, **kwargs):
         """ """
         self.fetch_gaia_catalog(gmag_range=gmag_range,
@@ -149,7 +149,7 @@ class ZIFFFitter( ZIFF ):
                             rpmag_range=None,
                              bpmag_range=None,
                              colormag_range=None,
-                             bound_padding=30,
+                             bound_padding=50,
                              isolated=True, 
                              name='gaia',
                              seplimit=8, setit=True,
