@@ -20,7 +20,7 @@
 # RUNNING THE CODE
 
 for i in $(cat $1); do
-    qsub ziffit.py ${1} --catalog 'ps1cat' --addfilter 'gmag' '14' '18'
+    qsub /sps/lsst/users/rigault/anaconda3/bin/ziffit.py ${1} --catalog 'ps1cat' --addfilter 'gmag' '14' '18'
 done
 
 
