@@ -49,8 +49,9 @@ class ZIFFFitter( ZIFF ):
     #  PIFF     #
     # --------- #
     def run_piff(self, catalog="default", catfileout=None, overwrite_cat=True,
-                     fitcatprop={}, 
+                     fitcatprop={}, suffle=False,
                      on_filtered_cat=True,
+                     stampsize=None, nstars=None, interporder=None, maxoutliers=None,
                      save_suffix='output.piff'):
         """ run the piff PSF algorithm on the given images using 
         the given reference catalog (star location) 
@@ -66,16 +67,31 @@ class ZIFFFitter( ZIFF ):
             if catalog not in self.catalog:
                 self.fetch_calibration_catalog(name=catalog, **fitcatprop)
 
+
+        # - update the config:
+        if nstars is not None:
+            self.set_nstars(nstars)
+
+        if stampsize is not None:
+            self.set_stampsize(stampsize)
+            
+        if interporder is not None:
+            self.set_config_value('psf,interp,order', interporder)
+
+        if maxoutliers is not None:
+            self.set_config_value('psf,outliers,max_remove', maxoutliers)
+
+            
         # 1.
         # - Create the piff stars
         stars, (fitcat, inputfile) = self.get_stars(catalog, fileout="default",
                                                     filtered=on_filtered_cat,
-                                                    update_config=True,
+                                                    update_config=True, nstars=None,
                                                     fullreturn=True)
         # - and record the information
         self._fitcatalog = fitcat
         self.config['calibration_cat'] = self.fitcatalog.get_config()
-
+            
         # 2.
         # - Build the PSF object 
         psf = piff.SimplePSF.process(self.config['psf'])
@@ -202,22 +218,11 @@ class ZIFFFitter( ZIFF ):
         shapes['T_data_normalized'] = shapes['T_data']/np.median(shapes['T_data'])
         shapes['T_model_normalized'] = shapes['T_model']/np.median(shapes['T_data'])
         # Adding cat_kwargs
-        shapes = {**shapes, **get_stars_cat_kwargs(stars)}
+        #shapes = {**shapes, **get_stars_cat_kwargs(stars)}
         if save:
             [np.savez(p + save_suffix,**shapes) for p in self.get_prefix()]
             
         return shapes
-
-    def compute_residuals(self, stars, normed = True, sky = 100):
-        """ """
-        residuals = []
-        for s in stars:
-            draw = self.psf.drawStar(s)
-            res = s.image.array - draw.image.array
-            if normed:
-                res /= draw.image.array + sky
-            residuals.append(res)
-        return np.stack(residuals)
 
 
     # ================ #
@@ -246,7 +251,8 @@ class ZiffCollection( object ):
         Parameters
         ----------
         sciimg_list, mskimg_list: [strings or list of] -optional-
-            Path (or list of) to the ztf science image (sciimg.fits) and their corresponding mask images (mskimg.fits)
+            Path (or list of) to the ztf science image (sciimg.fits) 
+            and their corresponding mask images (mskimg.fits)
 
         logger: [logger or None] -optional-
             logger passed to piff.
@@ -256,7 +262,8 @@ class ZiffCollection( object ):
         if mskimg_list is None:
             mskimg_list = [None] * len(sciimg_list)
             
-        self.ziffs = [Ziff(s,m,logger,**kwargs) for (s,m) in zip(np.atleast_1d(sciimg_list), np.atleast_1d(mskimg_list))]
+        self.ziffs = [Ziff(s,m,logger,**kwargs) for (s,m) in
+                        zip(np.atleast_1d(sciimg_list), np.atleast_1d(mskimg_list))]
     
     @classmethod
     def from_zquery(cls, zquery,  groupby = ['ccdid','fracday','fid'], **kwargs):

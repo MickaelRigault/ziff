@@ -320,6 +320,11 @@ class _ZIFFImageHolder_( _ZIFFLogConfig_ ):
         # mask
         if which in ["mask", "bkgd"]:
             return self.get_mask(**kwargs)
+
+    def get_imageprop(self, key, **kwargs):
+        """ gets [img.`key` for img in images] """
+        return self._read_images_property_(key, isfunc=False, **kwargs)
+    
         
     def get_data(self, applymask=True, maskvalue=np.NaN, rmbkgd=True, whichbkgd="default"):
         """ """
@@ -469,9 +474,10 @@ class _ZIFFImageHolder_( _ZIFFLogConfig_ ):
 
 class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
     
-    def __init__(self, sciimg=None, mskimg=None,
+    def __init__(self, sciimg=None, mskimg=None, psffile=None,
                       logger=None, catalog=None,
-                      config="default", download=True):
+                      config="default", fetch_psf=False,
+                      download=True):
         """Wrapper of PIFF for ZTF 
 
         Single fit of potentially multi images.
@@ -500,10 +506,13 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         if catalog is not None:
             self.set_catalog(catalog, name="calibrator")
             
-            
         # - Logger            
         if logger is not None:
             self.set_logger(logger)
+
+        # - PSF file
+        if psffile is not None or fetch_psf:
+            self.load_psf(psffile, fetch=fetch_psf)
 
     @classmethod
     def from_file(cls, filename, row=0, **kwargs):
@@ -514,11 +523,46 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
                 if i == row:
                     sciimg = line[0:-1].split(',')
                     return cls(sciimg, **kwargs)
+
+    def store_psfshape(self, catalog, which=['stars', 'psfmodel'], filtered=True,
+                           add_imgprop=True, add_filter=None, fileout=None):
+        """ """
+        data = self.get_psfshape(catalog, which=which, filtered=filtered,
+                                     add_imgprop=add_imgprop, add_filter=add_filter)
+        if self.is_single():
+            if fileout is None:
+                fileout = self.prefix+'psfshape.csv' 
+            data.to_csv(fileout)
+        else:
+            raise NotImplementedError("No shape datastorage implemented for non-single ziff.")
+        
     # ================ #
     #   Methods        #
     # ================ #
     # ------- #
-    #  SETTER #
+    # LOADER  #
+    # ------- #
+    def load_psf(self, psffilename=None, fetch=True):
+        """ loads a piff output file: `bla`_output.piff'
+        This contains the PSF properties
+        """
+        if psffilename is None and fetch:
+            from ztfquery import buildurl
+            psffilename_ = [buildurl.filename_to_scienceurl(prefix_, source="local", suffix="output.piff", check_suffix=False)
+                               for prefix_ in self.get_prefix()]
+            psffilename = [None if not os.path.isfile(psf_) else psf_ for psf_ in psffilename_]
+            if self.is_single():
+                psffilename = psffilename[0]
+
+                
+        # TO BE TESTED, CASE WITH MULTI IMAGES.
+        if psffilename is not None:
+            self.set_psf( piff.PSF.read(file_name=psffilename, logger=self.logger) )
+            # tmp patch:
+            #self.psf.wcs = list(np.atleast_1d(self.psf.wcs))        
+        
+    # ------- #
+    # SETTER  #
     # ------- #
     def set_psf(self, psf):
         """ """
@@ -527,6 +571,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
     def fetch_catalog(self, which="gaia", name=None, setit=True,
                           setsky=True, setwcs=True, setmask=True,
                           add_boundfilter=True, bound_padding=30,
+                          isolationlimit=None,
                           **kwargs):
         """ **kwargs goes to catalog.fetch_ziff_catalog() """
         
@@ -547,6 +592,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
             mask = self.get_mask()
             stampsize = self.get_config_value("stamp_size")
             catalog_.build_mask_from_maskimg(mask, stampsize)
+            catalog_.add_filter('masked', False, name='maskedout')
             
         if add_boundfilter and bound_padding is not None:
             ymax, xmax = self.shape
@@ -555,11 +601,87 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
             catalog_.add_filter('ypos',[bound_padding, ymax-bound_padding],
                                     name = 'ypos_out')
 
+        if isolationlimit is not None:
+            catalog_.measure_isolation(seplimit=isolationlimit)
+            catalog_.add_filter('is_isolated', True, name='not_isolated')
+            
+            
         if not setit:
             return catalog_
         
         self.set_catalog(catalog_, name=name)
 
+    def fetch_ps1cal_catalog(self, setit=True,
+                                 name="ps1cal",
+                                 setsky=True, setwcs=True, setmask=True,
+                                 add_boundfilter=True, bound_padding=30,
+                                 isolationlimit=None,
+                                 gmag_range=None, rmag_range=None,
+                                 imag_range=None, zmag_range=None,
+                                 ):
+        """ """
+        dataframes = self._read_images_property_("get_ps1_calibrators", isfunc=True)
+        if self.is_single():
+            ps1cat = catalog.Catalog(dataframes.rename(columns={"x":"xpos","y":"ypos"}),
+                                  name="ps1cal")
+        else:
+            catlist = [catalog.Catalog(df_.rename(columns={"x":"xpos","y":"ypos"}), name=name_)
+                         for i,(df_,name_) in enumerate(zip(dataframes, self.get_prefix(True))) ]
+            ps1cat = catalog.CatalogCollection(catlist, load_data=True)
+
+        catalog_ = self._enrich_cat_(ps1cat,
+                                    name=name,
+                                    setsky=setsky, setwcs=setwcs, setmask=setmask,
+                                    add_boundfilter=add_boundfilter, bound_padding=bound_padding,
+                                    isolationlimit=isolationlimit)
+        if gmag_range is not None:
+            catalog_.add_filter('gmag', gmag_range, name='gmag_outrange')
+        if rmag_range is not None:
+            catalog_.add_filter('rmag', rmag_range, name='rmag_outrange')
+        if imag_range is not None:
+            catalog_.add_filter('imag', imag_range, name='imag_outrange')
+        if zmag_range is not None:
+            catalog_.add_filter('zmag', zmag_range, name='zmag_outrange')
+
+        if not setit:
+            return catalog_
+
+        self.set_catalog(catalog_, name=name)
+
+    def _enrich_cat_(self, catalog_, name=None,
+                         setsky=True, setwcs=True, setmask=True,
+                         add_boundfilter=True, bound_padding=30,
+                         isolationlimit=None):
+        """ """
+        if catalog_.name is None:
+            catalog_.change_name(name)
+
+        if setwcs:
+            catalog_.set_wcs(self.wcs)
+            
+        if setsky:
+            sky = self.get_background()
+            stampsize = self.get_config_value("stamp_size")
+            catalog_.build_sky_from_bkgdimg(sky, stampsize)
+
+        if setmask:
+            mask = self.get_mask()
+            stampsize = self.get_config_value("stamp_size")
+            catalog_.build_mask_from_maskimg(mask, stampsize)
+            catalog_.add_filter('masked', False, name='maskedout')
+            
+        if add_boundfilter and bound_padding is not None:
+            ymax, xmax = self.shape
+            catalog_.add_filter('xpos',[bound_padding, xmax-bound_padding],
+                                    name = 'xpos_out')
+            catalog_.add_filter('ypos',[bound_padding, ymax-bound_padding],
+                                    name = 'ypos_out')
+
+        if isolationlimit is not None:
+            catalog_.measure_isolation(seplimit=isolationlimit)
+            catalog_.add_filter('is_isolated', True, name='not_isolated')
+
+        return catalog_
     # ------- #
     # GETTER  #
     # ------- #
@@ -587,12 +709,41 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
 
     def get_psf(self, catalog, chipnum=0, flux=1.0, iloc=None, **kwargs):
         """ """
-        cat = self.get_catalog(catalog, idx=chipnum)
+        cat = self.get_catalog(catalog, chipnum=chipnum)
         xpos, ypos = cat.get_data()[["xpos","ypos"]] if iloc is None else cat.get_data().iloc[iloc][["xpos","ypos"]]
         return [eval_psf(xpos_, ypos_, chipnum=chipnum, flux=flux, **kwargs)
                     for xpos_, ypos_ in zip(xpos, ypos) ]
+
+    def get_psfshape(self, catalog, which=["stars", "psfmodel"], filtered=True, add_imgprop=True,
+                         add_filter=None):
+        """ """
+        import pandas
+        from . import star
+        stars, (cat, inputfile) = self.get_stars( catalog, filtered=filtered,
+                                                   fullreturn=True, add_filter=add_filter)
+        soll = star.StarCollection(stars)
+        if "psfmodel" in which:
+            soll.measure_psfmodel(self.psf)
+            
+        soll.measure_shapes(which)
+
+        # Building the returned dataframe
+        catmag = cat.data
+        stars  = soll.shapes["stars"].set_index(catmag.index)
+        model  = soll.shapes["psfmodel"].set_index(catmag.index)
+        
+        mshapes = pandas.merge(stars, model, left_index=True, right_index=True, suffixes=("_stars","_model"))
+        dataout = pandas.merge(catmag, mshapes, left_index=True, right_index=True)
+        if add_imgprop:
+            if not self.is_single():
+                print("add_imgprop not implemented yet for non-single images")
+            else:
+                for key in ["ccdid","rcid","qid","fieldid","filterid","exptime","obsjd"]:
+                    dataout[key] = self.get_imageprop(key)
+                    
+        return dataout
     
-    def get_stamp(self, catalog, which="data", filtered=True, **kwargs):
+    def get_stamp(self, catalog, which="data", filtered=True, fullreturn=False, **kwargs):
         """ 
         Parameters
         ----------
@@ -610,17 +761,20 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
                // using self.get_mask()
             - mask: mask image (bool)
         """
-        return self._get_single_stamp_(catalog, which=which, filtered=filtered, **kwargs)
+        return self._get_single_stamp_(catalog, which=which, filtered=filtered, fullreturn=fullreturn, **kwargs)
             
-    def _get_single_stamp_(self, catalog, which="data", filtered=True, xyformat="numpy", **kwargs):
+    def _get_single_stamp_(self, catalog, which="data", filtered=True, xyformat="numpy", fullreturn=False, **kwargs):
         """ """
         cat = self.get_catalog(catalog)
-        return cat.get_datastamps(self.get_imagedata(which=which, **kwargs),
+        stamps = cat.get_datastamps(self.get_imagedata(which=which, **kwargs),
                                       self.get_config_value("stamp_size"), filtered=filtered,
                                       xyformat=xyformat)
+        if fullreturn:
+            return stamps, cat.get_data(filtered=filtered)
+        return stamps
 
     def get_stars(self, catalog, fileout="tmp", fullreturn=False,
-                      update_config=False,
+                      update_config=False, nstars="no_limit",
                       filtered=True, **kwargs):
         """ return PIFF stars for the given catalog using get_piff_inputfile().makeStars() 
 
@@ -651,6 +805,16 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
             ioconfig = self.get_config_value("i/o").copy()
         else:
             ioconfig = self.get_config_value("i/o")
+
+        #
+        if nstars is not None:
+            if type(nstars) is str:
+                if nstars in ["no_limit"]:
+                    ioconfig["nstars"] = len(cat.data)+1
+                else:
+                    raise ValueError("Cannot parse given nstars")
+            else:
+                ioconfig["nstars"] = nstars
             
         ioconfig['cat_file_name'] = list(np.atleast_1d(catfile))
 
@@ -664,7 +828,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
             return stars
 
         return stars, (cat, inputfile)
-    
+
     # ------- #
     # FITTER  #
     # ------- #
@@ -690,6 +854,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
             new_star = self.psf.model.draw( target_star )
         else:
             new_star = self.psf.drawStar( star )
+            # new_star.fit.params
             
         return new_star.image.array if asarray else new_star
 
@@ -701,56 +866,48 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         
         return self.get_star_psfmodel(stars, normed=normed)
     
-    def fit_psfflux(self, catalog, filtered=True, fit_center=False, show_progress=True):
+    def get_refluxed(self, catalog, filtered=True, which="piff", fit_center=False, show_progress=True):
         """ """
-        print("NOT SURE WHY, BUT DOES NOT SEEM TO WORK, see get_psfmodel")
-        
+        print("Not clear if this should be used.")
         stars, (fitcat, inputfile) = self.get_stars(catalog, fileout="tmp",
                                                     filtered=filtered,
                                                     update_config=False,
                                                     fullreturn=True)
         
         wcs, pointing = self.get_wcspointing(inputfile=inputfile)
-        
-        #
-        # - Setting the progress bar
-        if show_progress:
-            from astropy.utils.console import ProgressBar
-            from .utils import is_running_from_notebook
-            bar = ProgressBar( len(stars), ipython_widget=is_running_from_notebook() )
-        else:
-            bar = None
-        # -
-        #
-
-        #
-        # - loop over the stars
+            
         new_stars = []
-        for (i, star_) in enumerate(stars):
-            if bar is not None:
-                bar.update(i)
-                
-            #s.image.wcs = wcs[s.chipnum]
-            #s.run_hsm()
-            new_s = self.psf.interpolateStar( self.psf.model.initialize(star_) )
-#            new_s.fit.flux = star_.run_hsm()[0]
-#            new_s.fit.center = (0,0)
-            #new_s = self.psf.model.reflux(new_s, fit_center=fit_center)
+        for (i,s) in enumerate(stars):
+            s.image.wcs = wcs[s.chipnum]
+            s.run_hsm()
+            new_s = self.psf.interpolateStar(self.psf.model.initialize( s ))
+            new_s.fit.flux = s.run_hsm()[0]
+            new_s.fit.center = (0,0)
+            new_s = self.psf.model.reflux(new_s, fit_center = fit_center)    
             new_stars.append(new_s)
 
-        if bar is not None:
-            bar.update( len(stars) )
-
-        # - Loop over
-        #
-        
         return new_stars, stars
-        
-        
     
     # ------- #
     # PLOTTER #
     # ------- #
+    def show_single_image(self, which="dataclean", chipnum=0, add_catalog=None, ax=None, zorder=3, 
+               filteredcat=True, catprop={}, **kwargs):
+        """ """
+        import matplotlib.pyplot as mpl
+        img = self.images if self.is_single() else self.images[chipnum]
+
+        ax = img.show(which=which, ax=ax, zorder=zorder, **kwargs)
+    
+        if add_catalog is not None:
+            cat = self.get_catalog("ps1cal", chipnum=chipnum)
+            catprop_default = dict(marker="x", facecolors="C1", edgecolors="C1",)
+            sc = ax.scatter(cat.get_xpos(filtered=filteredcat),
+                                cat.get_ypos(filtered=filteredcat),
+                                zorder=zorder+1, **{**catprop_default,**catprop},
+                                )
+        return ax
+
     def show_stamps(self, catalog, nstamps=9, ncol=3, indexes=None, which="data", filtered=True, 
                 noticks=True, ssize=2.5, tight_layout=True, cmap="cividis", sort=True, **kwargs):
         """ """
@@ -796,85 +953,17 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
     # ------- #
     # PIFF    #
     # ------- #
-    def catalog_to_stars(self, catalog, fileout=None, append_df_keys = None, **kwargs):
+    def compute_residuals(self, stars, normed = True, sky = 100):
         """ """
-        # Fortan format requested as PIFF expect x_col, y_col ccd-positions in fortran/FITS format
-        # starting at (1,1) and not numpy/matplotlib (0,0) default in ZIFF.
-        # This centeres the stars created by makeStar
-        print("DEPRECATED catalog_to_stars is deprecated, use get_stars()")
-        stars = self.get_stars(catalog, fileout=None, **kwargs)
-        
+        residuals = []
         for s in stars:
-            s._cat_kwargs = {}
-            
-        if append_df_keys is not None:
-            print("append_df_keys | Not implemented | commented out.")
-            #append_df_keys = np.atleast_1d(append_df_keys)
-            #df = self.get_stacked_cat_df()[catalog]
-            #for (i,s) in enumerate(stars):
-            #    for key in append_df_keys:
-            #        s._cat_kwargs[key] = df.iloc[i][key]
-            #        s._cat_kwargs['name'] = df.iloc[i].name
-            
-        return stars
-
-    def reflux_stars(self, stars, fit_center = False, which = 'piff', show_progress=True):
-        """ measure the flux and centroid (if allowed) of the star give the PSF.
+            draw = self.psf.drawStar(s)
+            res = s.image.array - draw.image.array
+            if normed:
+                res /= draw.image.array + sky
+            residuals.append(res)
+        return np.stack(residuals)
         
-
-        Parameters
-        ----------
-        stars: [piff.Stars (list of)]
-        
-        fit_center: [bool] -optional-
-
-
-        which: [string] -optional-
-            how to fit for the reflux?
-        
-        show_progress: [bool] -optional-
-            Show progress bar (astropy.utils.console.ProgressBar)
-
-        Returns
-        -------
-        piff.Stars
-        """
-        if fit_center:
-            self.psf.model._centered = True
-            
-        wcs, pointing = self.get_wcspointing()
-        new_stars = []
-        if show_progress:
-            from astropy.utils.console import ProgressBar
-            from .utils import is_running_from_notebook
-            bar = ProgressBar( len(stars), ipython_widget=is_running_from_notebook() )
-        else:
-            bar = None
-            
-        for (i,s) in enumerate(stars):
-            if bar is not None:
-                bar.update(i)
-                
-            s.image.wcs = wcs[s.chipnum]
-            s.run_hsm()
-            new_s = self.psf.model.initialize(s)
-            new_s = self.psf.interpolateStar(new_s)
-            new_s.fit.flux = s.run_hsm()[0]
-            new_s.fit.center = (0,0)
-            if which == 'minuit':
-                new_s = self.reflux_minuit(new_s, fit_center = fit_center)
-            else:
-                new_s = self.psf.model.reflux(new_s, fit_center = fit_center)
-                
-            new_s._cat_kwargs = s._cat_kwargs
-            new_stars.append(new_s)
-
-        if bar is not None:
-            bar.update( len(stars) )
-
-        self.psf.model._centered = False
-        return new_stars
-
 
     @property
     def psf(self):

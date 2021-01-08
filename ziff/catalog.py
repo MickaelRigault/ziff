@@ -38,6 +38,7 @@ def fetch_ziff_catalog(ziff, which="gaia", as_collection=True,**kwargs):
 
     if as_collection:
          return CatalogCollection(cats, load_data=True)
+     
     return cats
 
 def fetch_catalog(which, ra, dec, radius, r_unit="deg", **kwargs):
@@ -45,7 +46,7 @@ def fetch_catalog(which, ra, dec, radius, r_unit="deg", **kwargs):
     return eval(f"fetch_{which}_catalog")(ra, dec, radius, r_unit=r_unit, **kwargs)
 
 def fetch_gaia_catalog(ra, dec, radius= 0.75, r_unit="deg",column_filters={'Gmag': '10..20'},
-                        as_catalog=True, name="gaia",
+                        as_catalog=True, name="gaia", viziercat="I/345/gaia2",
                         **kwargs):
     """ query online gaia-catalog in Vizier (I/345, DR2) using astroquery.
     This function requieres an internet connection.
@@ -85,7 +86,7 @@ def fetch_gaia_catalog(ra, dec, radius= 0.75, r_unit="deg",column_filters={'Gmag
     v = vizier.Vizier(columns, column_filters=column_filters)
     v.ROW_LIMIT = -1
     # cache is False is necessary, notably when running in a computing center.
-    gaiatable = v.query_region(coord, radius=angle,catalog="I/345/gaia2", cache=False).values()[0]
+    gaiatable = v.query_region(coord, radius=angle, catalog=viziercat, cache=False).values()[0]
     gaiatable['colormag'] = gaiatable['RPmag'] - gaiatable['BPmag']
     if not as_catalog:
         return gaiatable
@@ -165,13 +166,7 @@ class Catalog(object):
 
     def copy(self, name = None, **kwargs):
         """ """        
-        if name is None:
-            name = self._name
-            
-        c = self.__class__(dataframe=self._data.copy(), name=name, **kwargs)
-        c._filters = copy.deepcopy(self._filters)
-        c.update_filter()
-        return c
+        return self.get_catalog(name=name, **kwargs)
     
     # ----- #
     #  I/O  #
@@ -261,7 +256,7 @@ class Catalog(object):
         else:
             raise ValueError("Only fits and csv format implemented")
 
-    def to_fits(self, savefile, header=None, filtered=True, overwrite=False):
+    def to_fits(self, savefile, header=None, filtered=True, overwrite=False, shuffled=False):
         """ Store the catalog as a fits file. 
         
         Parameters
@@ -284,16 +279,16 @@ class Catalog(object):
         # - Primary
         hdul.append(fits.PrimaryHDU([], header))
         # - Data
-        hdul.append( self.get_data(filtered=filtered, as_hdu=True) )
+        hdul.append( self.get_data(filtered=filtered, as_hdu=True, shuffled=shuffled) )
         # -> out
         hdul = fits.HDUList(hdul)
         return hdul.writeto(savefile, overwrite=overwrite)
 
-    def to_csv(self, savefile, filtered=True, overwrite=False,**kwargs):
+    def to_csv(self, savefile, filtered=True, overwrite=False, shuffled=False, **kwargs):
         """ """
         if os.path.isfile(savefile) and not overwrite:
             raise IOError(f"Cannot overwrite {savefile}")
-        df = self.get_data(filtered=filtered).reset_index()
+        df = self.get_data(filtered=filtered, shuffled=shuffled).reset_index()
         df.to_csv(savefile, **kwargs)
         
     # ================ #
@@ -530,35 +525,51 @@ class Catalog(object):
     # -------- #
     #  GETTER  #
     # -------- #
-    def get_filtered(self, **kwargs):
+    
+    # - Returns Copy
+    def get_catalog(self, filtered=False, shuffled=False, xyformat=None, name=None, **kwargs):
         """ Get the filtered version of the catalog 
         
         Returns
         ------
         self.__class__
         """
-        return self.__class__(dataframe=self.get_data(filtered=True),
-                              name="filtered_"+self.name,
-                              wcs=self.wcs, header=self.header,
-                              mask=self.mask[~self.filterout],
-                              **kwargs)
+        if name is None:
+            name = self.name
 
-    def get_as_xyformat(self, xyformat, filtered=False, **kwargs):
-        """ """
-        data = self.get_data(filtered=filtered).copy()
-        origin = self._get_xyorigin_(xyformat)
-        if origin != 0:
-            data[self._xposkey] -= origin
-            data[self._yposkey] -= origin
-
-        return self.__class__( dataframe=data,
-                               name=f"{xyformat}format_"+ ("filtered_" if filtered else "") +self.name,
-                               wcs=self.wcs, header=self.header,
-                               mask=self.mask[~self.filterout] if filtered else self.mask,
-                               xyformat=xyformat,
-                               **kwargs)
+        new_data = self.get_data(filtered=filtered, shuffled=shuffled,
+                                     xyformat=xyformat,
+                                     as_hdu=False).copy()
+        new_cat = self.__class__(new_data,
+                                  name=name,
+                                  wcs=self.wcs, header=self.header,
+                                  mask=self.mask[~self.filterout] if (filtered and self.mask is not None) else self.mask,
+                                  **kwargs)
+        if not filtered:
+            new_cat._filters = self._filters.copy()
+        else:
+            _ = [new_cat.data.pop(k) for k in self._filters.keys()]
+            _ = new_cat.data.pop("filterout")
+            
+        return new_cat
+            
+    def get_filtered(self, shuffled=False, **kwargs):
+        """ Get the filtered version of the catalog 
         
-    def get_data(self, filtered=False, as_hdu=False):
+        Returns
+        ------
+        self.__class__
+        """
+        return self.get_catalog(filtered=True, shuffled=shuffled, name=f"filtered_{self.name}", **kwargs)
+
+    def get_as_xyformat(self, xyformat, filtered=False, shuffled=False, **kwargs):
+        """ """
+        return self.get_catalog(xyformat=xyformat, filtered=filtered, shuffled=shuffled,
+                                name=f"{xyformat}format_"+ ("filtered_" if filtered else "") +self.name,
+                                **kwargs)
+        
+    # - Return DataFrame
+    def get_data(self, filtered=False, shuffled=False, xyformat=None, as_hdu=False):
         """ Basis of the catalog class. 
 
         Returns
@@ -567,9 +578,24 @@ class Catalog(object):
         """
         if not self.has_data():
             raise AttributeError("No data set yet. Use self.set_data()")
-        d_ = self.data[~self.filterout] if filtered else self.data
+
+        d_ = self.data.copy()
+        
+        if xyformat is not None:
+            origin = self._get_xyorigin_(xyformat)
+            if origin != 0:
+                d_[self._xposkey] -= origin
+                d_[self._yposkey] -= origin
+                
+        if filtered:        
+            d_ = d_[~self.filterout]
+        
+        if shuffled:
+            d_ = d_.sample(frac=1)
+        
         if as_hdu:
             return dataframe_to_hdu(d_)
+        
         return d_
 
     def get_header(self):
@@ -699,7 +725,7 @@ class Catalog(object):
             
         self.data.loc[:, 'filterout'] = self.data[used_filters].sum(axis=1).astype("bool")
     
-    def add_filter(self, key, range_values, name = None, update=True):
+    def add_filter(self, key, range_values, name = None, update=True, verbose=False):
         """ """
         if name is None:
             name = key + str(range_values)
@@ -712,10 +738,10 @@ class Catalog(object):
         self.data[name] = False
 
         if len(np.atleast_1d(range_values))==2:
-            print(f"{key} between {range_values}")
+            if verbose: print(f"{key} between {range_values}")
             self.data.loc[:,name] = ~self.data[key].between(*range_values)
         elif len(np.atleast_1d(range_values))==1:
-            print(f"{key} equals {range_values}")
+            if verbose: print(f"{key} equals {range_values}")
             self.data.loc[:,name] = ~(self.data[key] == np.atleast_1d(range_values)[0])
         else:
             raise ValueError("cannot parse the given range_values, should have size 1 or 2")
@@ -924,7 +950,17 @@ class CatalogCollection( Catalog ):
     def read_psfcat(cls, psfcat, name="ztfcat"):
         """ loads from ziff.ztfcat[0] """
         return NotImplementedError("read_fits to be implemented")
-    
+
+
+    def get_as_xyformat(self, xyformat, filtered=False, **kwargs):
+        """ """
+        newcoll = self.__class__( self._call_down_("get_as_xyformat", isfunc=True,
+                                                xyformat=xyformat, filtered=filtered, *kwargs),
+                                     load_data=True)
+        newcoll.change_name(f"{xyformat}format_"+ ("filtered_" if filtered else "") +self.name)
+        return newcoll
+        
+        
     # ----- #
     #  I/O  #
     # ----- #
@@ -1010,10 +1046,11 @@ class CatalogCollection( Catalog ):
         
         if len( np.atleast_1d(prefix) ) == 1: # same for all
             prefix = [np.atleast_1d(prefix)[0]]*self.ncatalogs
-                
-        prefix = [f"{prefix_}{self.name}{i}_" for i,prefix_ in enumerate(prefix)]
-        return self._call_down_("build_filename", isfunc=True,
-                              enumargs=prefix, extension=extension, **kwargs)
+
+        if not extension.startswith("."):
+            extension = f".{extension}"
+            
+        return [f"{prefix_}{self.name}{i}{extension}" for i,prefix_ in enumerate(prefix)]
 
     
     def build_sky_from_bkgdimg(self, bkgdimg, stampsize, askey="sky",
@@ -1069,15 +1106,29 @@ class CatalogCollection( Catalog ):
             self._load_data_()
             
         return out
+
+    def _guess_xyformat_(self):
+        """ """
+        return self._call_down_("_guess_xyformat_", isfunc=True)
     
     # -------- #
     # SETTER   #
     # -------- #
-    def set_catalogs(self, catalogs, load_data=True):
+    def set_catalogs(self, catalogs, load_data=True, force_xyformat=None):
         """ """
-        self._catalogs = np.atleast_1d(catalogs)
+        if force_xyformat is None:
+            self._catalogs = np.atleast_1d(catalogs)
+        else:
+            self._catalogs = [c_ if c_._xyformat == force_xyformat else c_.get_as_xyformat(force_xyformat)
+                                  for c_ in np.atleast_1d(catalogs)]
+            
         if load_data:
             self._load_data_()
+
+
+    def _clean_format_(self, force_xyformat="numpy"):
+        """ """
+        self.set_catalogs(self.catalogs, force_xyformat=force_xyformat)
         
     # change_name OK
     def set_data(self, dataframes, keys=None, clean_nameduplicate=True):
@@ -1199,14 +1250,12 @@ class CatalogCollection( Catalog ):
         self._call_down_("update_filter", isfunc=True)
         self._load_data_()
     
-    
     def add_filter(self, key, range_values, name = None, update=True):
         """ """
         self._call_down_("add_filter", key=key, range_values=range_values,
                              name=name, isfunc=True, update=False)
         if update:
             self.update_filter()
-        
 
     def remove_filter(self, name):
         """ """
@@ -1261,10 +1310,23 @@ class CatalogCollection( Catalog ):
         """ """
         return np.asarray( self._call_down_("mask", isfunc=False) )
 
-    @property
-    def filterout(self):
+    # Fix the xyformat is needed
+    def _guess_xyformat_(self):
         """ """
-        return np.asarray( self._call_down_("filterout", isfunc=False) )
+        formats = np.asarray( self._call_down_("xyformat", isfunc=False) )
+        if len(np.unique(formats)) == 1:
+            print(f"setting _xyformat to {np.unique(formats)[0]}")
+            self._xyformat = np.unique(formats)[0]
+        else:
+            warnings.warn("Several xyformat. Cleaning the catalog to get all in 'numpy'")
+            self._clean_format_(force_xyformat="numpy")
+            self._xyformat = "nuympy"
+
+            
+#    @property
+#    def filterout(self):
+#        """ """
+#        return np.asarray( self._call_down_("filterout", isfunc=False) )
     
     @property
     def header(self):
@@ -1304,29 +1366,54 @@ class _CatalogHolder_( object ):
     # -------- #
     #  GETTER  #
     # -------- #
-    def get_catalog(self, catalog, idx=None, xyformat=None):
-        """ Eval if catalog is a name or an object. Returns the object """
+    def get_catalog(self, catalog, chipnum=None, xyformat=None,
+                        filtered=False, shuffled=False,
+                        add_filter=None):
+        """ Eval if catalog is a name or an object. Returns the object 
+        = This returns a copy of the requested catalog = 
+        
+
+        addfilter: [None or dict] -optional-
+            filter_format: {name: [key, vrange]}
+            like: addfilter={'gmag_outrange':['gmag', [15,19]]}
+            This filter will be added to the returned catalog
+
+        
+        """
         #
         # A bit messy but clean the issue of list of catalog if any.
         #
         if isinstance(catalog, str):
-            if len( np.atleast_1d(self.catalog[catalog]) )==1 or idx is None:
-                catalog = self.catalog[catalog]
-            else:
-                catalog = self.catalog[catalog].catalogs[idx]
+            catalog = self.catalog[catalog]
+        
+        if chipnum is not None and CatalogCollection in catalog.__class__.__mro__:
+            catalog = catalog.catalogs[chipnum]
 
-        if xyformat is not None and xyformat != catalog.xyformat:
-            print(f"requesting {xyformat} format")
-            catalog = catalog.get_as_xyformat(xyformat, filtered=False)
+        # Build a copy
+        catalog = catalog.get_catalog()
 
+        #
+        # - Add filter if any
+        if add_filter is not None:
+            for fname, values in add_filter.items():
+                key, vrange = values
+                catalog.add_filter(key, vrange, name=fname)
+        #
+        # - Change format or
+        if xyformat is not None or filtered or shuffled:
+            # This is a copy
+            catalog = catalog.get_catalog(filtered=filtered, shuffled=shuffled, xyformat=xyformat)
+        
         return catalog
         
-    def _get_stored_catalog_(self, catalog, idx=None, fileout=None,
-                                 xyformat=None,
-                                 overwrite=True, filtered=True):
+    def _get_stored_catalog_(self, catalog, chipnum=None, fileout=None,
+                                 filtered=True, shuffled=False, xyformat=None,
+                                 add_filter=None, overwrite=True):
         """ """
-        cat = self.get_catalog(catalog, idx=idx, xyformat=xyformat)
-
+        cat = self.get_catalog(catalog, chipnum=chipnum, xyformat=xyformat,
+                                shuffled=shuffled, filtered=filtered,
+                                add_filter=add_filter)
+        
         if fileout is None or fileout in ["default"]:
             fileout = cat.build_filename(self.prefix)
         elif fileout in ["tmp"]:
@@ -1334,7 +1421,7 @@ class _CatalogHolder_( object ):
             
         #else -> fileout = fileout
         
-        cat.write_to(fileout, overwrite=overwrite, filtered=filtered)
+        cat.write_to(fileout, overwrite=overwrite)
         return cat, fileout
     
     def get_stacked_cat_df(self):
