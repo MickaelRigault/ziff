@@ -22,7 +22,7 @@
 
 cat ${1} | while read line
 do
-    echo("ziffit.py ${FILENAME} --catalog 'ps1cat' --addfilter 'gmag' '14' '18'")
+    echo(${FILENAME})
 done
 		 
 
