@@ -43,3 +43,5 @@ def vminvmax_parser(data, vmin, vmax):
     if type(vmax) == str:
         vmax = np.percentile(data, float(vmax))
     return vmin, vmax
+
+

@@ -23,7 +23,6 @@ if  __name__ == "__main__":
     parser.add_argument('infile', type=str, default="None", nargs="*",
                         help='cube filepath')
 
-
     #
     # - PSF options
     #
@@ -96,11 +95,12 @@ if  __name__ == "__main__":
     z = psffitter.ZIFFFitter(sciimg=requested, fetch_psf=False)
 
     print(f" == 2 == Fetching the *{args.catalog}* catalog")
+    print("type(args.catalog): {type(args.catalog)}")
     if args.catalog in ["ps1cal"]:
         catalog = "ps1cal"
         z.fetch_ps1cal_catalog(name="ps1cal", bound_padding=args.boundpad)
     else:
-        raise NotImplementedError("only ps1cal catalog has been implemented")
+        raise NotImplementedError("only ps1cal catalog has been implemented {args.catalog} given")
 
     print(f" == 3 == Setting the config options")
     z.set_nstars(args.nstars) # In general we only have ~200 calibrators / quadrant
