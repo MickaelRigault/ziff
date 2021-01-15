@@ -1,4 +1,4 @@
-# Ziff
+# ziff
 
 
 ** Ziff is a wrapper to use Piff on ZTF images **
