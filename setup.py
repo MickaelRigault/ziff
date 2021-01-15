@@ -19,7 +19,7 @@ print(f"packages to be installed: {packages}")
 
 VERSION = '0.2.2'
         
-setup(name='Ziff',
+setup(name='ziff',
       version=VERSION,
       description='Piff for ZTF',
       author='Mickael Rigault, Romain Graziani',
