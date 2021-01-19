@@ -5,7 +5,7 @@
 
 ## Credit
 
-R. Graziani (r.graziani@clermont.in2p3.fr, CNRS/IN2P3), M. Rigault (m.rigault@ipnl.in2p3.fr, CNRS/IN2P3)
+M. Rigault (m.rigault@ipnl.in2p3.fr, CNRS/IN2P3), R. Graziani (r.graziani@clermont.in2p3.fr, CNRS/IN2P3)
 
 
 # Installation
