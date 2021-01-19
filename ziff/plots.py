@@ -25,13 +25,13 @@ __author__ = 'Romain Graziani <romain.graziani@clermont.in2p3.fr>'
 __date__ = '2020/10/02 10:46:12'
 __adv__ = 'plots.py'
 
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as mpl
 from matplotlib.gridspec import GridSpec
 from scipy.stats import binned_statistic_2d
-
+import numpy as np
 
 def make_focal_plane():
-    fig = plt.figure(figsize=(8,7.75))
+    fig = mpl.figure(figsize=(8,7.75))
     gs = GridSpec(4, 5, figure=fig,wspace=0.1,hspace=0.1, width_ratios = [1,1,1,1,0.1], height_ratios=[1,1,1,1])
     return fig, gs
 
@@ -45,6 +45,43 @@ def get_ax_ccd(fig, gs, ccd):
     ax = fig.add_subplot(gs[i,j])
     return ax, i, j
 
+
+def vminvmax_parser(data, vmin, vmax):
+    """ """
+    if vmin is None:
+        vmin="0"
+    if vmax is None:
+        vmax = "100"
+    if type(vmin) == str:
+        vmin = np.percentile(data, float(vmin))
+    if type(vmax) == str:
+        vmax = np.percentile(data, float(vmax))
+    return vmin, vmax
+
+def get_threeplot_axes(fig=None, left= 0.08, width=0.22, hspan=0.01,
+                        extra_hspan=0.1, bottom=0.2,
+                        height = 0.7, cwidth = 0.01):
+    """ """
+    if fig is None:
+        fig = mpl.figure(figsize=[10,3])
+        
+    left, width, hspan = 0.08, 0.22, 0.01
+    extra_hspan = 0.1
+    bottom, height = 0.2,0.7
+    cwidth = 0.01
+    
+    axd = fig.add_axes([left+0*(width+ hspan), bottom,  
+                        width, height])
+    axm = fig.add_axes([left+1*(width+ hspan), bottom,  
+                        width, height])
+    caxm = fig.add_axes([left+2*(width+ hspan), bottom,  
+                        cwidth, height])
+    axr = fig.add_axes([left+2*(width+ hspan)+extra_hspan+hspan, bottom,  
+                        width, height])
+    caxr = fig.add_axes([left+3*(width+ hspan)+extra_hspan+hspan, bottom,  
+                        cwidth, height])
+
+    return [axd, axm, caxm], [axr, caxr]
 
 
 def show_shapebinned(dataframe, nbins=50, 

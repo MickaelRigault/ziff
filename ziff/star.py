@@ -1,5 +1,3 @@
-
-
 """ Wrapper of the piff.Star  """
 import numpy as np
 import pandas 

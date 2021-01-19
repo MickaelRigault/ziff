@@ -1373,9 +1373,9 @@ class _CatalogHolder_( object ):
         = This returns a copy of the requested catalog = 
         
 
-        addfilter: [None or dict] -optional-
+        add_filter: [None or dict] -optional-
             filter_format: {name: [key, vrange]}
-            like: addfilter={'gmag_outrange':['gmag', [15,19]]}
+            like: add_filter={'gmag_outrange':['gmag', [15,19]]}
             This filter will be added to the returned catalog
 
         

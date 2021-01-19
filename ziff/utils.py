@@ -31,17 +31,3 @@ def avoid_duplicate(string_array):
             string_array[np.in1d(string_array,name_)] = [name_+f"{i+1}" for i in range(nname_)]
             
     return np.asarray(string_array, dtype="str")
-
-def vminvmax_parser(data, vmin, vmax):
-    """ """
-    if vmin is None:
-        vmin="0"
-    if vmax is None:
-        vmax = "100"
-    if type(vmin) == str:
-        vmin = np.percentile(data, float(vmin))
-    if type(vmax) == str:
-        vmax = np.percentile(data, float(vmax))
-    return vmin, vmax
-
-

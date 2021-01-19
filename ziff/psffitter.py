@@ -52,7 +52,7 @@ class ZIFFFitter( ZIFF ):
                      fitcatprop={}, suffle=False,
                      on_filtered_cat=True,
                      stampsize=None, nstars=None, interporder=None, maxoutliers=None,
-                     save_suffix='output.piff'):
+                     save_suffix='output.piff', verbose=False, store=True):
         """ run the piff PSF algorithm on the given images using 
         the given reference catalog (star location) 
         
@@ -66,7 +66,6 @@ class ZIFFFitter( ZIFF ):
             catalog = "gaia_calibration"
             if catalog not in self.catalog:
                 self.fetch_calibration_catalog(name=catalog, **fitcatprop)
-
 
         # - update the config:
         if nstars is not None:
@@ -87,7 +86,7 @@ class ZIFFFitter( ZIFF ):
         stars, (fitcat, inputfile) = self.get_stars(catalog, fileout="default",
                                                     filtered=on_filtered_cat,
                                                     update_config=True, nstars=None,
-                                                    fullreturn=True)
+                                                    fullreturn=True, verbose=verbose)
         # - and record the information
         self._fitcatalog = fitcat
         self.config['calibration_cat'] = self.fitcatalog.get_config()
@@ -101,10 +100,13 @@ class ZIFFFitter( ZIFF ):
         
         # 3.
         # - Store the results
-        [psf.write(p + save_suffix) for p in self.get_prefix()]
-        [self.save_config(p + 'piff_config.json') for p in self.get_prefix()]
+        if store:
+            [psf.write(p + save_suffix) for p in self.get_prefix()]
+            [self.save_config(p + 'piff_config.json') for p in self.get_prefix()]
+            
         # - save on the current object.
         self.set_psf(psf)
+        return psf
 
     # -------- #
     # BUILDER  #

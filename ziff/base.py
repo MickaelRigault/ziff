@@ -86,7 +86,7 @@ class _ZIFFLogConfig_( object ):
     # -------- #
     #  GETTER  #
     # -------- #
-    def get_piff_inputfile(self, catfile=None, ioconfig=None, verbose=True):
+    def get_piff_inputfile(self, catfile=None, ioconfig=None, verbose=False):
         """ get the PIFF input file given your logger and configurations 
         
         ioconfig: [dict]  -optional-
@@ -107,10 +107,10 @@ class _ZIFFLogConfig_( object ):
         inputfile.setPointing('RA','DEC')
         return inputfile
 
-    def get_wcspointing(self, inputfile=None):
+    def get_wcspointing(self, inputfile=None, verbose=False):
         """ """
         if inputfile is None:
-            inputfile = self.get_piff_inputfile()
+            inputfile = self.get_piff_inputfile(verbose=verbose)
             
         wcs = inputfile.getWCS()
         inputfile.setPointing('RA','DEC')
@@ -524,10 +524,10 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
                     sciimg = line[0:-1].split(',')
                     return cls(sciimg, **kwargs)
 
-    def store_psfshape(self, catalog, which=['stars', 'psfmodel'], filtered=True,
-                           add_imgprop=True, add_filter=None, fileout=None):
+    def store_psfshape(self, catalog, psf=None, which=['stars', 'psfmodel'], filtered=True,
+                           add_imgprop=True, add_filter=None, fileout=None, getshape=False):
         """ """
-        data = self.get_psfshape(catalog, which=which, filtered=filtered,
+        data = self.get_psfshape(catalog, psf=psf, which=which, filtered=filtered,
                                      add_imgprop=add_imgprop, add_filter=add_filter)
         if self.is_single():
             if fileout is None:
@@ -535,7 +535,10 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
             data.to_csv(fileout)
         else:
             raise NotImplementedError("No shape datastorage implemented for non-single ziff.")
-        
+
+        if getshape:
+            return data
+
     # ================ #
     #   Methods        #
     # ================ #
@@ -574,7 +577,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
                           isolationlimit=None,
                           **kwargs):
         """ **kwargs goes to catalog.fetch_ziff_catalog() """
-        
+        print("fetch_catalog IS DEPRECATED")
         catalog_ = catalog.fetch_ziff_catalog(self, which=which, as_collection=True, **kwargs)
         
         if catalog_.name is None:
@@ -696,7 +699,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
             stamp_size = self.get_config_value("stamp_size")
 
         # not really important as the PSF is not varying that fast.
-        formatoffset = -1 if informat is "numpy" else 0
+        formatoffset = -1 if informat == "numpy" else 0
             
         galsimimg = self.psf.draw(xpos-formatoffset, ypos-formatoffset,
                                       stamp_size=stamp_size,
@@ -714,16 +717,19 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         return [eval_psf(xpos_, ypos_, chipnum=chipnum, flux=flux, **kwargs)
                     for xpos_, ypos_ in zip(xpos, ypos) ]
 
-    def get_psfshape(self, catalog, which=["stars", "psfmodel"], filtered=True, add_imgprop=True,
-                         add_filter=None):
+    def get_psfshape(self, catalog, psf=None, which=["stars", "psfmodel"], filtered=True, add_imgprop=True,
+                         add_filter=None, verbose=False):
         """ """
         import pandas
         from . import star
         stars, (cat, inputfile) = self.get_stars( catalog, filtered=filtered,
-                                                   fullreturn=True, add_filter=add_filter)
+                                                   fullreturn=True, add_filter=add_filter,
+                                                      verbose=verbose)
         soll = star.StarCollection(stars)
         if "psfmodel" in which:
-            soll.measure_psfmodel(self.psf)
+            if psf is None:
+                psf = self.psf
+            soll.measure_psfmodel(psf)
             
         soll.measure_shapes(which)
 
@@ -775,7 +781,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
 
     def get_stars(self, catalog, fileout="tmp", fullreturn=False,
                       update_config=False, nstars="no_limit",
-                      filtered=True, **kwargs):
+                      filtered=True, verbose=False, **kwargs):
         """ return PIFF stars for the given catalog using get_piff_inputfile().makeStars() 
 
         Parameters
@@ -818,7 +824,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
             
         ioconfig['cat_file_name'] = list(np.atleast_1d(catfile))
 
-        inputfile = self.get_piff_inputfile(ioconfig=ioconfig)
+        inputfile = self.get_piff_inputfile(ioconfig=ioconfig, verbose=verbose)
 
         # 3.
         # - build stars from the inputfil
@@ -858,21 +864,21 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
             
         return new_star.image.array if asarray else new_star
 
-    def get_psfmodel(self, catalog, filtered=True, normed=False):
+    def get_psfmodel(self, catalog, filtered=True, normed=False, verbose=False):
         """ """
         stars = self.get_stars(catalog, fileout="tmp",
                                filtered=filtered, update_config=False,
-                               fullreturn=False)
+                               fullreturn=False, verbose=verbose)
         
         return self.get_star_psfmodel(stars, normed=normed)
     
-    def get_refluxed(self, catalog, filtered=True, which="piff", fit_center=False, show_progress=True):
+    def get_refluxed(self, catalog, filtered=True, which="piff", fit_center=False, show_progress=True, verbose=False):
         """ """
         print("Not clear if this should be used.")
         stars, (fitcat, inputfile) = self.get_stars(catalog, fileout="tmp",
                                                     filtered=filtered,
                                                     update_config=False,
-                                                    fullreturn=True)
+                                                    fullreturn=True, verbose=verbose)
         
         wcs, pointing = self.get_wcspointing(inputfile=inputfile)
             
@@ -909,7 +915,8 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         return ax
 
     def show_stamps(self, catalog, nstamps=9, ncol=3, indexes=None, which="data", filtered=True, 
-                noticks=True, ssize=2.5, tight_layout=True, cmap="cividis", sort=True, **kwargs):
+                noticks=True, ssize=2.5, tight_layout=True, cmap="cividis", sort=True,
+                    magkey=None, **kwargs):
         """ """
         import matplotlib.pyplot as mpl
     
@@ -935,7 +942,9 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         for i, stamp_ in enumerate(stamps_toshow):
             ax = fig.add_subplot(nrow, ncol, i+1)
             ax.imshow(stamp_, cmap=cmap, **{**prop, **kwargs})
-            info = f"({catdata.iloc[i]['xpos']:.1f},{catdata.iloc[i]['ypos']:.1f}) | {catdata.iloc[i]['Gmag']:.1f} mag"
+            info = f"({catdata.iloc[i]['xpos']:.1f},{catdata.iloc[i]['ypos']:.1f})"
+            if magkey is not None:
+                info += f" | {catdata.iloc[i][magkey]:.1f} mag"
             info += "\n"+ f" f-out: {catdata.iloc[i]['filterout']}"
             ax.text(0.05,0.95, info, color="w", weight="bold", 
                         transform=ax.transAxes, fontsize="x-small",
