@@ -110,15 +110,15 @@ def dask_ziffit(files, catalog="ps1cal",
                 shape_catfilter=[["gmag",14,19]],
                 **kwargs):
     """ """
-    works = []
+    psfs = []
     for i,file_ in enumerate(files):
-        worked_psf_shapes = dask_single(file_, catalog=catalog,
+        psf_ = dask_single(file_, catalog=catalog,
                          fit_filter=fit_filter,
                          shape_catfilter=shape_catfilter,
                          **kwargs)
-        works.append(worked[0])
+        psfs.append(psf_[0])
         
-    return delayed(np.asarray)(works) # This is useless but final point
+    return delayed(np.asarray)(psfs) # This is useless but final point
 
 
 def dask_single(file_, catalog="ps1cal", verbose=False,
@@ -141,7 +141,7 @@ def dask_single(file_, catalog="ps1cal", verbose=False,
                                           boundpad=boundpad, addfilter=fit_filter,
                                           isolationlimit=fit_isolationlimit,
                                           verbose=verbose)
-
+    
     psf       = delayed(run_piff)(ziff, cat_to_fit, 
                                       nstars=nstars, interporder=interporder, 
                                       maxoutliers=maxoutliers,
