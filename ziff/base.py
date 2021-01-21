@@ -7,7 +7,7 @@ import os
 import numpy as np
 import logging
 import json
-
+import warnings
 # PIFF 
 import piff
 
@@ -805,6 +805,12 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         # - parse catalog
         cat, catfile = self._get_stored_catalog_(catalog, fileout=fileout, filtered=filtered,
                                                 **{**{"xyformat":"fortran"},**kwargs})
+        if cat.npoints == 0:
+            warnings.warn("No entry in the given catalog, no stars to get.")
+            if not fullreturn:
+                return None
+            return None, (cat, None)
+        
         # 2.
         # - build the piff input file using a copy of the i/o config
         if not update_config:
@@ -823,7 +829,6 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
                 ioconfig["nstars"] = nstars
             
         ioconfig['cat_file_name'] = list(np.atleast_1d(catfile))
-
         inputfile = self.get_piff_inputfile(ioconfig=ioconfig, verbose=verbose)
 
         # 3.

@@ -6,6 +6,7 @@ import os
 import numpy as np
 import pandas as pd
 import json
+import warnings
 
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -48,7 +49,9 @@ class ZIFFFitter( ZIFF ):
     # --------- #
     #  PIFF     #
     # --------- #
-    def run_piff(self, catalog="default", catfileout=None, overwrite_cat=True,
+    def run_piff(self, catalog="default",
+                     minstars=30,
+                     catfileout=None, overwrite_cat=True,
                      fitcatprop={}, suffle=False,
                      on_filtered_cat=True,
                      stampsize=None, nstars=None, interporder=None, maxoutliers=None,
@@ -87,6 +90,13 @@ class ZIFFFitter( ZIFF ):
                                                     filtered=on_filtered_cat,
                                                     update_config=True, nstars=None,
                                                     fullreturn=True, verbose=verbose)
+        if stars is None:
+            warnings.warn(f"No  star in the catalog used in run_piff (empty catalog)")
+            return None
+        elif len(stars)<minstars:
+            warnings.warn(f"Not enough star in the catalog used in run_piff ({len(stars)}<{minstars})")
+            return None
+        
         # - and record the information
         self._fitcatalog = fitcat
         self.config['calibration_cat'] = self.fitcatalog.get_config()

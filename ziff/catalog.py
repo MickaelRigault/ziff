@@ -501,6 +501,8 @@ class Catalog(object):
             
             if len(shift)>1:
                 raise ValueError("non constant offset when guessing the xyformat. This unexpected.")
+            if len(shift)==0:
+                return None
             if int(shift[0])==0:
                 self._xyformat = "numpy"
             elif int(shift[0])==1: # to be checked.
@@ -580,6 +582,8 @@ class Catalog(object):
             raise AttributeError("No data set yet. Use self.set_data()")
 
         d_ = self.data.copy()
+        if len(d_)==0:
+            return d_
         
         if xyformat is not None:
             origin = self._get_xyorigin_(xyformat)
@@ -1413,6 +1417,10 @@ class _CatalogHolder_( object ):
         cat = self.get_catalog(catalog, chipnum=chipnum, xyformat=xyformat,
                                 shuffled=shuffled, filtered=filtered,
                                 add_filter=add_filter)
+
+        if cat.npoints == 0:
+            warnings.warn("no data in the given catalog to store.")
+            return cat, "None"
         
         if fileout is None or fileout in ["default"]:
             fileout = cat.build_filename(self.prefix)
