@@ -112,11 +112,11 @@ def dask_ziffit(files, catalog="ps1cal",
     """ """
     works = []
     for i,file_ in enumerate(files):
-        worked = dask_single(file_, catalog=catalog,
+        worked_psf_shapes = dask_single(file_, catalog=catalog,
                          fit_filter=fit_filter,
                          shape_catfilter=shape_catfilter,
                          **kwargs)
-        works.append(worked)
+        works.append(worked[0])
         
     return delayed(np.asarray)(works) # This is useless but final point
 
@@ -157,7 +157,46 @@ def dask_single(file_, catalog="ps1cal", verbose=False,
     
     worked   = delayed(checkout_ziffit)(psf, shapes)
     
-    return worked
+    return psf
+
+
+def single(file_, catalog="ps1cal", verbose=False,
+                dlfrom="irsa", allowdl=True,
+                logger=None, fetch_psf=False, config="default",
+                boundpad=50,
+                fit_filter=[["gmag",14,16]],
+                shape_catfilter=[["gmag",14,19]],
+                fit_isolationlimit=8, shape_isolationlimit=8,
+                nstars=300, interporder=3, maxoutliers=30):
+    """ """
+    fitimages  = get_file(file_, dlfrom=dlfrom, 
+                                       allowdl=allowdl, verbose=verbose, show_progress=False)
+
+    ziff       = get_ziff(fitimages[0], fitimages[1],
+                                 logger=logger, fetch_psf=fetch_psf, 
+                                config=config, verbose=verbose)
+
+    cat_to_fit = get_catalog(ziff, catalog,
+                                          boundpad=boundpad, addfilter=fit_filter,
+                                          isolationlimit=fit_isolationlimit,
+                                          verbose=verbose)
+
+    psf       = run_piff(ziff, cat_to_fit, 
+                                      nstars=nstars, interporder=interporder, 
+                                      maxoutliers=maxoutliers,
+                                      verbose=verbose)
+    
+    cat_shape = get_catalog(ziff, catalog,
+                                         boundpad=boundpad, 
+                                         addfilter=shape_catfilter,
+                                        isolationlimit=shape_isolationlimit,
+                                         verbose=verbose)
+
+    shapes   = store_psfshape(ziff, cat_shape, psf=psf,  getshape=True)
+    
+    worked   = checkout_ziffit(psf, shapes)
+    
+    return psf
 
 
     
