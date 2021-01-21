@@ -6,6 +6,9 @@ from .. import __version__
 
 from dask import delayed
 
+from ztfquery import io
+from ziff.psffitter import ZIFFFitter
+
 
 def _parse_addfilters_(addfilter):
     """ """
@@ -30,7 +33,7 @@ def get_file(filename, dlfrom="irsa", allowdl=True, verbose=True, **kwargs):
         print(" == 1 == Grabbing Files")
         print(f"* requested: {filename}")
 
-    from ztfquery import io
+
     prop = {**dict(dlfrom=dlfrom, downloadit=allowdl), **kwargs}
     sciimg_files = [io.get_file(f_, suffix="sciimg.fits",**prop) for f_ in np.atleast_1d(filename)]
     mskimg_files = [io.get_file(f_, suffix="mskimg.fits", **prop) for f_ in np.atleast_1d(filename)]
@@ -46,7 +49,6 @@ def get_ziff(sciimg_files, mskimg_files=None, logger=None, fetch_psf=False, conf
     if verbose:
         print(" == 2 == Loading ZIFF")
         
-    from ziff.psffitter import ZIFFFitter
     return ZIFFFitter(sciimg=sciimg_files,mskimg=mskimg_files,
                         logger=logger, fetch_psf=fetch_psf, config=config)
 
