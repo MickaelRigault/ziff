@@ -118,7 +118,7 @@ def dask_ziffit(files, catalog="ps1cal",
                          fit_filter=fit_filter,
                          shape_catfilter=shape_catfilter,
                          **kwargs)
-        psfs.append(psf_[0])
+        psfs.append(psf_)
         
     return delayed(np.asarray)(psfs) # This is useless but final point
 
