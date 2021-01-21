@@ -135,7 +135,7 @@ def dask_ziffit(files, catalog="ps1cal",
                          **kwargs)
         psfs.append(psf_)
         
-    return delayed(np.asarray)(psfs) # This is useless but final point
+    return delayed(list)(psfs) # This is useless but final point
 
 
 def dask_single(file_, catalog="ps1cal", verbose=False,
