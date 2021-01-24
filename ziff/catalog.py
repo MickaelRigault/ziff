@@ -545,11 +545,16 @@ class Catalog(object):
         new_data = self.get_data(filtered=filtered, shuffled=shuffled,
                                      xyformat=xyformat,
                                      as_hdu=False).copy()
+        if xyformat is None:
+            xyformat = self.xyformat
+            
         new_cat = self.__class__(new_data,
                                   name=name,
                                   wcs=self.wcs, header=self.header,
                                   mask=self.mask[~self.filterout] if (filtered and self.mask is not None) else self.mask,
+                                  xyformat=xyformat,
                                   **kwargs)
+        
         if not filtered:
             new_cat._filters = self._filters.copy()
         else:
