@@ -164,7 +164,7 @@ def dask_single(file_, catalog="ps1cal", verbose=False,
                                           isolationlimit=fit_isolationlimit,
                                           verbose=verbose)
     if not piffit:
-        return cat_to_fit
+        return cat_to_fit.npoints
     
     psf       = delayed(run_piff)(ziff, cat_to_fit, 
                                       minstars=minstars, nstars=nstars, interporder=interporder, 
@@ -182,7 +182,7 @@ def dask_single(file_, catalog="ps1cal", verbose=False,
     worked   = delayed(checkout_ziffit)(psf, shapes)
         
     # - output
-    return shapes
+    return shapes["sigma_stars"].mean()
 
 
 ###
