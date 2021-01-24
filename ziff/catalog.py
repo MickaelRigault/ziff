@@ -14,6 +14,9 @@ from astropy import units
 from astropy.io import fits #as aio
 from astropy.coordinates import Angle, SkyCoord, search_around_sky
 
+# out for Dask
+from .utils import avoid_duplicate
+from ztfimg.stamps import stamp_it
 
 def fetch_ziff_catalog(ziff, which="gaia", as_collection=True,**kwargs):
     """ High level function that fetch the `which` catalog data for the given ziff.
@@ -664,7 +667,6 @@ class Catalog(object):
 
     def get_datastamps(self, array, stampsize, filtered=False, xyformat="numpy"):
         """ """
-        from ztfimg.stamps import stamp_it
         return stamp_it(array,
                             self.get_xpos(filtered=filtered, xyformat=xyformat),
                             self.get_ypos(filtered=filtered, xyformat=xyformat),
@@ -1143,7 +1145,6 @@ class CatalogCollection( Catalog ):
         # SingleIndex
         if len(dataframes) == self.ncatalogs:
             if clean_nameduplicate:
-                from .utils import avoid_duplicate
                 keys = avoid_duplicate(keys)
             
             dataframes = pandas.concat(dataframes, keys=keys)

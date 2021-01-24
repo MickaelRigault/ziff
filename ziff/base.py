@@ -632,7 +632,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         dataframes = self._read_images_property_("get_ps1_calibrators", isfunc=True)
         if self.is_single():
             ps1cat = catalog.Catalog(dataframes.rename(columns={"x":"xpos","y":"ypos"}),
-                                  name="ps1cal")
+                                  name="ps1cal", xyformat="numpy")
         else:
             catlist = [catalog.Catalog(df_.rename(columns={"x":"xpos","y":"ypos"}), name=name_)
                          for i,(df_,name_) in enumerate(zip(dataframes, self.get_prefix(True))) ]

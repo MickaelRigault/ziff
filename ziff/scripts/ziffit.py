@@ -163,6 +163,7 @@ def dask_single(file_, catalog="ps1cal", verbose=False,
                                           boundpad=boundpad, addfilter=fit_filter,
                                           isolationlimit=fit_isolationlimit,
                                           verbose=verbose)
+    
     if not piffit:
         return cat_to_fit.npoints
     
