@@ -149,7 +149,7 @@ def dask_single(file_, catalog="ps1cal", verbose=False,
                 fit_filter=[["gmag",14,16]],
                 shape_catfilter=[["gmag",14,19]],
                 fit_isolationlimit=8, shape_isolationlimit=8,
-                run_piff=True,
+                piffit=True,
                 minstars=30, nstars=300, interporder=3, maxoutliers=30):
     """ """
     fitimages  = delayed(get_file)(file_, dlfrom=dlfrom, 
@@ -163,7 +163,7 @@ def dask_single(file_, catalog="ps1cal", verbose=False,
                                           boundpad=boundpad, addfilter=fit_filter,
                                           isolationlimit=fit_isolationlimit,
                                           verbose=verbose)
-    if not run_piff:
+    if not piffit:
         return None
     
     psf       = delayed(run_piff)(ziff, cat_to_fit, 
