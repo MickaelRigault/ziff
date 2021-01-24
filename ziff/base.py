@@ -372,6 +372,12 @@ class _ZIFFImageHolder_( _ZIFFLogConfig_ ):
         """
         return self._read_images_property_("get_background", isfunc=True,
                                             method=method, rmbkgd=rmbkgd, backup_default=backup_default, **kwargs)
+
+    def load_image_sourcebackground(self, **kwargs):
+        """ runs load_source_background on the images. """
+        return self._read_images_property_("load_source_background", isfunc=True, **kwargs)
+        
+
     # ================ #
     #   Properties     #
     # ================ #

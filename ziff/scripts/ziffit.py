@@ -45,14 +45,18 @@ def get_file(filename, dlfrom="irsa", allowdl=True, verbose=True, **kwargs):
     return sciimg_files, mskimg_files
 
 def get_ziff(sciimg_files, mskimg_files=None, logger=None, fetch_psf=False, config="default",
-                 verbose=True):
+                 verbose=True, load_background=True):
     """ """
     if verbose:
         print(" == 2 == Loading ZIFF")
         
-    return ZIFFFitter(sciimg=sciimg_files,mskimg=mskimg_files,
+    ziff_ = ZIFFFitter(sciimg=sciimg_files,mskimg=mskimg_files,
                         logger=logger, fetch_psf=fetch_psf, config=config)
-
+    if load_background:
+        ziff_.load_image_sourcebackground()
+        
+    return ziff_
+    
 def get_catalog(ziff, catalog, boundpad=50, addfilter=None, filtered=True, xyformat=None,
                     isolationlimit=None,
                     verbose=True):
@@ -154,7 +158,7 @@ def dask_single(file_, catalog="ps1cal", verbose=False,
                                  logger=logger, fetch_psf=fetch_psf, 
                                 config=config, verbose=verbose)
 
-    cat_to_fit = delayed(get_catalog)(ziff, catalog,
+    cat_to_fit = delayed(get_catalog)(ziff, catalog, 
                                           boundpad=boundpad, addfilter=fit_filter,
                                           isolationlimit=fit_isolationlimit,
                                           verbose=verbose)
@@ -164,7 +168,7 @@ def dask_single(file_, catalog="ps1cal", verbose=False,
                                       maxoutliers=maxoutliers,
                                       verbose=verbose)
     
-    cat_shape = delayed(get_catalog)(ziff, catalog,
+    cat_shape = delayed(get_catalog)(ziff, catalog, 
                                          boundpad=boundpad, 
                                          addfilter=shape_catfilter,
                                         isolationlimit=shape_isolationlimit,
@@ -175,7 +179,7 @@ def dask_single(file_, catalog="ps1cal", verbose=False,
     worked   = delayed(checkout_ziffit)(psf, shapes)
         
     # - output
-    return psf
+    return shapes
 
 
 ###
