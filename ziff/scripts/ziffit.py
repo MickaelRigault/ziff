@@ -164,7 +164,7 @@ def dask_single(file_, catalog="ps1cal", verbose=False,
                                           isolationlimit=fit_isolationlimit,
                                           verbose=verbose)
     if not piffit:
-        return None
+        return cat_to_fit
     
     psf       = delayed(run_piff)(ziff, cat_to_fit, 
                                       minstars=minstars, nstars=nstars, interporder=interporder, 
