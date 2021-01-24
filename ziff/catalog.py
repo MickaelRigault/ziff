@@ -500,7 +500,7 @@ class Catalog(object):
             shift = np.unique(self.data[self._xposkey] - np_xpos)
             
             if len(shift)>1:
-                raise ValueError("non constant offset when guessing the xyformat. This unexpected.")
+                raise ValueError(f"non-constant offset when guessing the xyformat. This unexpected. shift: {shift}")
             if len(shift)==0:
                 return None
             if int(shift[0])==0:
