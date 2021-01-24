@@ -118,7 +118,8 @@ class StarCollection( object ):
                               for star_ in self.stars]
         self._psfmodelarray = stars_to_array(self.psfmodel, origin="image")
 
-    def measure_shapes(self, which=["stars","psfmodel"], normalisation="nanmedian"):
+    def measure_shapes(self, which=["stars","psfmodel"], normalisation="nanmedian",
+                           nopsf=False):
         """ """
         for which in np.atleast_1d(which):
             shapes = {'flux': [], 'sigma': [], 
@@ -126,32 +127,38 @@ class StarCollection( object ):
                       'flagout': [],"u":[],"v":[],"x":[],"y":[],
                       'center_u' : [],'center_v' : [],
                       'center_x' : [],'center_y' : []}
-            
-            for s_ in getattr(self, which):
-                s_.run_hsm()
-                flux, center_x, center_y, sigma, shape_g1, shape_g2, flag = s_.run_hsm()
-                
-                shapes['flux'].append(flux)
-                #
-                shapes['sigma'].append(sigma)
-                #
-                shapes['shape_g1'].append(shape_g1)
-                shapes['shape_g2'].append(shape_g2)
-                shapes['u'].append(s_.u)
-                shapes['v'].append(s_.v)
-                shapes['x'].append(s_.x)
-                shapes['y'].append(s_.y)
-                #
-                shapes['center_x'].append(center_x)
-                shapes['center_y'].append(center_y)
-                shapes['center_u'].append(s_.center[0])
-                shapes['center_v'].append(s_.center[1])
-                #
-                shapes['flagout'].append(flag)
 
-            shapes['flagout'] = np.asarray(shapes['flagout'], dtype="bool")
-            shapes['sigma']   = np.asarray(shapes['sigma'], dtype="float")
-            shapes['sigma_normalized'] = shapes['sigma']/ getattr(np,normalisation)(shapes['sigma'][~shapes['flagout']])
+            if which == "psfmodel" and nopsf:
+                shapes = {k:np.ones(self.nstars)*np.NaN for k in shapes.keys()}
+                shapes['flagout'] = np.asarray(np.zeros(self.nstars), dtype="bool")
+                shapes['sigma_normalized'] = shapes['sigma'].copy() # NaNs
+                
+            else:
+                for s_ in getattr(self, which):
+                    s_.run_hsm()
+                    flux, center_x, center_y, sigma, shape_g1, shape_g2, flag = s_.run_hsm()
+                
+                    shapes['flux'].append(flux)
+                    #
+                    shapes['sigma'].append(sigma)
+                    #
+                    shapes['shape_g1'].append(shape_g1)
+                    shapes['shape_g2'].append(shape_g2)
+                    shapes['u'].append(s_.u)
+                    shapes['v'].append(s_.v)
+                    shapes['x'].append(s_.x)
+                    shapes['y'].append(s_.y)
+                    #
+                    shapes['center_x'].append(center_x)
+                    shapes['center_y'].append(center_y)
+                    shapes['center_u'].append(s_.center[0])
+                    shapes['center_v'].append(s_.center[1])
+                    #
+                    shapes['flagout'].append(flag)
+
+                shapes['flagout'] = np.asarray(shapes['flagout'], dtype="bool")
+                shapes['sigma']   = np.asarray(shapes['sigma'], dtype="float")
+                shapes['sigma_normalized'] = shapes['sigma']/ getattr(np,normalisation)(shapes['sigma'][~shapes['flagout']])
             
             self.shapes[which] = pandas.DataFrame(shapes)
             

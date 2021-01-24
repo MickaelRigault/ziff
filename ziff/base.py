@@ -531,10 +531,12 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
                     return cls(sciimg, **kwargs)
 
     def store_psfshape(self, catalog, psf=None, which=['stars', 'psfmodel'], filtered=True,
-                           add_imgprop=True, add_filter=None, fileout=None, getshape=False):
+                           add_imgprop=True, add_filter=None, fileout=None, getshape=False,
+                           nopsf=False):
         """ """
         data = self.get_psfshape(catalog, psf=psf, which=which, filtered=filtered,
-                                     add_imgprop=add_imgprop, add_filter=add_filter)
+                                     add_imgprop=add_imgprop, add_filter=add_filter,
+                                     nopsf=False)
         if self.is_single():
             if fileout is None:
                 fileout = self.prefix+'psfshape.csv' 
@@ -723,9 +725,18 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         return [eval_psf(xpos_, ypos_, chipnum=chipnum, flux=flux, **kwargs)
                     for xpos_, ypos_ in zip(xpos, ypos) ]
 
-    def get_psfshape(self, catalog, psf=None, which=["stars", "psfmodel"], filtered=True, add_imgprop=True,
-                         add_filter=None, verbose=False):
-        """ """
+    def get_psfshape(self, catalog, psf=None,
+                         which=["stars", "psfmodel"], filtered=True, add_imgprop=True,
+                         add_filter=None, verbose=False,
+                         nopsf=False):
+        """ 
+        Parameters
+        ----------
+        emptypsf: [bool] -optional-
+            safeout for empty PSF cases.
+
+            
+        """
         import pandas
         from . import star
         stars, (cat, inputfile) = self.get_stars( catalog, filtered=filtered,
@@ -733,11 +744,12 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
                                                       verbose=verbose)
         soll = star.StarCollection(stars)
         if "psfmodel" in which:
-            if psf is None:
-                psf = self.psf
-            soll.measure_psfmodel(psf)
+            if not nopsf:
+                if psf is None:
+                    psf = self.psf
+                soll.measure_psfmodel(psf)
             
-        soll.measure_shapes(which)
+        soll.measure_shapes(which, nopsf=nopsf)
 
         # Building the returned dataframe
         catmag = cat.data
