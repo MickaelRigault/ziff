@@ -536,7 +536,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         """ """
         data = self.get_psfshape(catalog, psf=psf, which=which, filtered=filtered,
                                      add_imgprop=add_imgprop, add_filter=add_filter,
-                                     nopsf=False)
+                                     nopsf=nopsf)
         if self.is_single():
             if fileout is None:
                 fileout = self.prefix+'psfshape.csv' 

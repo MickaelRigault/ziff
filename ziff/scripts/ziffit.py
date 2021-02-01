@@ -26,24 +26,6 @@ def _parse_addfilters_(addfilter):
 # ================= #
 #  SCRIPT STEPS     #
 # ================= #
-
-def get_file(filename, dlfrom="irsa", allowdl=True, verbose=True, **kwargs):
-    """ """
-    #
-    if verbose:
-        print(" == 1 == Grabbing Files")
-        print(f"* requested: {filename}")
-
-
-    prop = {**dict(dlfrom=dlfrom, downloadit=allowdl), **kwargs}
-    sciimg_files = [io.get_file(f_, suffix="sciimg.fits",**prop) for f_ in np.atleast_1d(filename)]
-    mskimg_files = [io.get_file(f_, suffix="mskimg.fits", **prop) for f_ in np.atleast_1d(filename)]
-
-    if verbose:
-        print(f"\t-> corresponding to \n\t{sciimg_files} \n\tand\n\t{mskimg_files}")
-        
-    return sciimg_files, mskimg_files
-
 def get_ziff(sciimg_files, mskimg_files=None, logger=None, fetch_psf=False, config="default",
                  verbose=True, load_background=True):
     """ """
@@ -107,10 +89,10 @@ def store_psfshape(ziff, catalog, psf, addfilter=None,
     """
     if verbose: print(f" Storing the PSF shapes.")
     add_filter = _parse_addfilters_(addfilter)
-    if psf is None:
-        return None
+    nopsf = psf is None
     
-    return ziff.store_psfshape(catalog, psf=psf, add_filter=add_filter, getshape=getshape)
+    return ziff.store_psfshape(catalog, psf=psf, add_filter=add_filter,
+                                   getshape=getshape, nopsf=nopsf)
     
 
 def checkout_ziffit(psf, shapes):
@@ -143,7 +125,7 @@ def dask_ziffit(files, catalog="ps1cal",
 
 
 def dask_single(file_, catalog="ps1cal", verbose=False,
-                dlfrom="irsa", allowdl=True,
+                dlfrom="irsa", allowdl=True, overwrite=True,
                 logger=None, fetch_psf=False, config="default",
                 boundpad=50,
                 fit_filter=[["gmag",14,16]],
@@ -152,17 +134,22 @@ def dask_single(file_, catalog="ps1cal", verbose=False,
                 piffit=True,
                 minstars=30, nstars=300, interporder=3, maxoutliers=30):
     """ """
-    fitimages  = delayed(get_file)(file_, dlfrom=dlfrom, 
-                                       allowdl=allowdl, verbose=verbose, show_progress=False)
+    fitsciimg  = delayed(io.get_file)(file_, suffix="sciimg.fits", maxnprocess=1, dlfrom=dlfrom, 
+                                        overwrite=overwrite, downloadit=allowdl,
+                                        verbose=verbose, show_progress=False)
+    
+    fitmskimg  = delayed(io.get_file)(file_, suffix="mskimg.fits", maxnprocess=1, dlfrom=dlfrom, 
+                                        overwrite=overwrite, downloadit=allowdl,
+                                        verbose=verbose, show_progress=False)
 
-    ziff       = delayed(get_ziff)(fitimages[0], fitimages[1],
-                                 logger=logger, fetch_psf=fetch_psf, 
-                                config=config, verbose=verbose)
+    ziff       = delayed(get_ziff)(fitsciimg, fitmskimg,
+                                    logger=logger, fetch_psf=fetch_psf, 
+                                    config=config, verbose=verbose)
 
     cat_to_fit = delayed(get_catalog)(ziff, catalog, 
-                                          boundpad=boundpad, addfilter=fit_filter,
-                                          isolationlimit=fit_isolationlimit,
-                                          verbose=verbose)
+                                        boundpad=boundpad, addfilter=fit_filter,
+                                        isolationlimit=fit_isolationlimit,
+                                        verbose=verbose)
     
     if not piffit:
         return cat_to_fit.npoints
@@ -180,7 +167,7 @@ def dask_single(file_, catalog="ps1cal", verbose=False,
 
     shapes   = delayed(store_psfshape)(ziff, cat_shape, psf=psf,  getshape=True)
     
-    worked   = delayed(checkout_ziffit)(psf, shapes)
+    # worked   = delayed(checkout_ziffit)(psf, shapes)
         
     # - output
     return shapes["sigma_stars"].mean()
