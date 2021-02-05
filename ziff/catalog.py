@@ -18,7 +18,10 @@ from astropy.coordinates import Angle, SkyCoord, search_around_sky
 from .utils import avoid_duplicate
 from ztfimg.stamps import stamp_it
 
-def fetch_ziff_catalog(ziff, which="gaia", as_collection=True,**kwargs):
+from ztfquery.io import CCIN2P3
+_CC = CCIN2P3(connect=False)
+        
+def fetch_ziff_catalog(ziff, which="gaia", as_collection=True, **kwargs):
     """ High level function that fetch the `which` catalog data for the given ziff.
     returns a CatalogCollection if allowed if the ziff is not a single ziff. 
     
@@ -48,10 +51,13 @@ def fetch_catalog(which, ra, dec, radius, r_unit="deg", **kwargs):
     """ """
     return eval(f"fetch_{which}_catalog")(ra, dec, radius, r_unit=r_unit, **kwargs)
 
-def fetch_gaia_catalog(ra, dec, radius= 0.75, r_unit="deg",column_filters={'Gmag': '10..20'},
-                        as_catalog=True, name="gaia", viziercat="I/345/gaia2",
+def fetch_gaia_catalog(ra, dec, radius= 0.75, r_unit="deg",
+                        column_filters={'Gmag': '10..20'},
+                        as_catalog=True, name="gaia",
+                        queryhost="vizier",
+                        catname="I/350/gaiaedr3",
                         **kwargs):
-    """ query online gaia-catalog in Vizier (I/345, DR2) using astroquery.
+    """ query online gaia-catalog in Vizier (I/350/gaiaedr3, eDR3) using astroquery.
     This function requieres an internet connection.
         
     Parameters
@@ -81,6 +87,50 @@ def fetch_gaia_catalog(ra, dec, radius= 0.75, r_unit="deg",column_filters={'Gmag
     -------
     GAIA Catalog (child of Catalog)
     """
+    if queryhost == "vizier":
+        df = _fetch_gaia_catalog_vizier_(ra, dec, radius= 0.75, r_unit=r_unit,
+                                             column_filters=column_filters,
+                                             catname=catname)
+    elif queryhost == "ccin2p3":
+        df = _CC.query_catalog(ra, dec, radius, catname=catname, depth=7, **kwargs)
+    
+    return Catalog(dataframe=df, name=name, **kwargs)
+
+
+def _fetch_gaia_catalog_vizier_(ra, dec, radius= 0.75, r_unit="deg",
+                                    column_filters={'Gmag': '10..20'},
+                                    catname="I/350/gaiaedr3"):
+    """ query online gaia-catalog in Vizier (I/350/gaiaedr3, eDR3) using astroquery.
+    This function requieres an internet connection.
+        
+    Parameters
+    ----------
+    ra, dec: [float]
+        center of the Catalog [in degree]
+
+    center: [string] 'ra dec'
+    position of the center of the catalog to query.
+    (we use the radec of center of the quadrant)
+        
+    radius: [string] 'value unit'
+    radius of the region to query. For instance '1d' means a
+    1 degree raduis
+    (from the center of the quadrant to the border it is about 0.65 deg)
+
+    extracolumns: [list-of-string] -optional-
+    Add extra column from the V/139 catalog that will be added to
+    the basic query (default: position, ID, object-type, magnitudes)
+    column_filters: [dict] -optional-
+    Selection criterium for the queried catalog.
+    (we have chosen G badn, it coers from 300 to 1000 nm in wavelength)
+
+    **kwargs goes to Catalog.__init__
+
+    Returns
+    -------
+    GAIA Catalog (child of Catalog)
+    """
+    
     from astroquery import vizier
     columns = ["Source","RA_ICRS","e_RA_ICRS","DE_ICRS","e_ED_ICRS", "Gmag", "RPmag", "BPmag"]
     
@@ -89,14 +139,12 @@ def fetch_gaia_catalog(ra, dec, radius= 0.75, r_unit="deg",column_filters={'Gmag
     v = vizier.Vizier(columns, column_filters=column_filters)
     v.ROW_LIMIT = -1
     # cache is False is necessary, notably when running in a computing center.
-    gaiatable = v.query_region(coord, radius=angle, catalog=viziercat, cache=False).values()[0]
-    gaiatable['colormag'] = gaiatable['RPmag'] - gaiatable['BPmag']
+    gaiatable = v.query_region(coord, radius=angle, catalog=catname, cache=False).values()[0]
+    gaiatable['colormag'] = gaiatable['BPmag'] - gaiatable['RPmag']
     if not as_catalog:
         return gaiatable
     
-    df = gaiatable.to_pandas().set_index('Source')
-    return Catalog(dataframe=df, name=name, **kwargs)
-
+    return gaiatable.to_pandas().set_index('Source')
 
 def dataframe_to_hdu(dataframe):
     """ converts a dataframe into a fits.BinTableHDU """
@@ -1378,7 +1426,7 @@ class _CatalogHolder_( object ):
     # -------- #
     def get_catalog(self, catalog, chipnum=None, xyformat=None,
                         filtered=False, shuffled=False,
-                        add_filter=None):
+                        add_filter=None, writeto=None, writetoprop={}):
         """ Eval if catalog is a name or an object. Returns the object 
         = This returns a copy of the requested catalog = 
         
@@ -1413,13 +1461,25 @@ class _CatalogHolder_( object ):
         if xyformat is not None or filtered or shuffled:
             # This is a copy
             catalog = catalog.get_catalog(filtered=filtered, shuffled=shuffled, xyformat=xyformat)
-        
+
+        if writeto is not None:
+            #
+            # - Special cases
+            if writeto in ["default"]:
+                writeto = catalog.build_filename(self.prefix)
+            elif  writeto in ["tmp"]:
+                writeto = catalog.build_filename("tmpcat_", extension=".fits")
+                
+            catalog.write_to(writeto, **{**dict(filtered=False),
+                                          **writetoprop})
+            
         return catalog
         
     def _get_stored_catalog_(self, catalog, chipnum=None, fileout=None,
                                  filtered=True, shuffled=False, xyformat=None,
                                  add_filter=None, overwrite=True):
         """ """
+        print("DEPRECATED, use get_catalog(writeto=)")
         cat = self.get_catalog(catalog, chipnum=chipnum, xyformat=xyformat,
                                 shuffled=shuffled, filtered=filtered,
                                 add_filter=add_filter)

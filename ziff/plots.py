@@ -58,30 +58,28 @@ def vminvmax_parser(data, vmin, vmax):
         vmax = np.percentile(data, float(vmax))
     return vmin, vmax
 
-def get_threeplot_axes(fig=None, left= 0.08, width=0.22, hspan=0.01,
-                        extra_hspan=0.1, bottom=0.2,
-                        height = 0.7, cwidth = 0.01):
+def get_threeplot_axes(fig=None, scalex=1, scaley=1, globalbottom=0, globalleft=0,
+                        left= 0.05, width=0.25, bottom=0.15, heigth=0.75,
+                        hspan=0.015, hxspan=0.1,
+                        cwidth = 0.01):
     """ """
     if fig is None:
-        fig = mpl.figure(figsize=[10,3])
+        fig = mpl.figure(figsize=[9,3])
         
-    left, width, hspan = 0.08, 0.22, 0.01
-    extra_hspan = 0.1
-    bottom, height = 0.2,0.7
-    cwidth = 0.01
-    
-    axd = fig.add_axes([left+0*(width+ hspan), bottom,  
-                        width, height])
-    axm = fig.add_axes([left+1*(width+ hspan), bottom,  
-                        width, height])
-    caxm = fig.add_axes([left+2*(width+ hspan), bottom,  
-                        cwidth, height])
-    axr = fig.add_axes([left+2*(width+ hspan)+extra_hspan+hspan, bottom,  
-                        width, height])
-    caxr = fig.add_axes([left+3*(width+ hspan)+extra_hspan+hspan, bottom,  
-                        cwidth, height])
+    left, width = globalleft+left*scalex, width*scalex
+    bottom, heigth = globalbottom+bottom*scaley, heigth*scaley
+    hspan, hxspan = hspan*scalex,hxspan*scalex
+    cwidth = cwidth*scalex
 
-    return [axd, axm, caxm], [axr, caxr]
+    axd = fig.add_axes([left+0*(width+hspan)     ,bottom,width,heigth])
+    axm = fig.add_axes([left+1*(width+hspan)     ,bottom,width,heigth])       
+    cax = fig.add_axes([left+2*(width+hspan)     ,bottom,cwidth,heigth])
+    axr = fig.add_axes([left+2*(width+hspan) +hxspan,bottom,width,heigth])        
+    caxr = fig.add_axes([left+3*(width+hspan)+hxspan,bottom,cwidth,heigth])
+    axes = [axd,axm,axr]
+    caxes = [cax, caxr]
+    
+    return fig, axes, caxes
 
 
 def show_shapebinned(dataframe, nbins=50, 
@@ -160,5 +158,88 @@ def show_shapebinned(dataframe, nbins=50,
     axm.set_yticks([])
     axr.set_yticks([])
 #    [[ax_.set_xticks([]),ax_.set_yticks([])] for ax_ in axes]
+
+
+
+#
+#   Plotting
+#
+def show_psfresults(psf, nstars=9, index=None, savefile=None, **kwargs):
+    """ 
+    if index given, nstars is ignored. 
+    """
+    all_indexes = np.arange(len(psf.stars))
+    if index is not None:
+        nstars = len(index)
+    elif nstars is not None:
+        index = np.random.choice(all_indexes, nstars, replace=False)
+    else:
+        raise ValueError("you must provide easer nstars or index ; both are None")
+        
+    print(index)
     
+    fig = mpl.figure(figsize=[9,3*nstars])
+    for i, index_ in enumerate(index):
+        _ = show_single_psfstar(psf, index_, fig=fig, 
+                            globalbottom=i/nstars, scaley=1/nstars, **kwargs)
+        if i ==0:
+            fig, axes, cax = _
+    
+    axes[0].set_xlabel("Data", weight="medium")
+    axes[1].set_xlabel("Model", weight="medium")
+    axes[2].set_xlabel("Residual", weight="medium")
+    
+    if savefile:
+        fig.savefig(savefile)
+        
+    return fig
+
+def show_single_psfstar(psf, index, fig=None,
+                        scalex=1, scaley=1, globalbottom=0, globalleft=0,
+                       vmin="1", vmax="99",cvmin="1", cvmax="99",
+                        show_text=True, **kwargs):
+    """ """
+    fig, axes, caxes= get_threeplot_axes(fig=fig, scalex=scalex, scaley=scaley,
+                                             globalbottom=globalbottom, globalleft=globalleft)
+    [axd,axm,axr] = axes
+    [cax, caxr] = caxes
+
+    # Star and Model
+    star_plotted  = psf.stars[index]
+    model_plotted = psf.drawStar(star_plotted)
+
+
+    data = star_plotted.image.array
+    model = model_plotted.image.array
+    residual = data-model
+
+    vmin_, vmax_ = vminvmax_parser(data, vmin, vmax)
+    cvmin_, cvmax_ = vminvmax_parser(residual, cvmin, cvmax)
+
+    prop = dict(origin="lower", cmap="cividis", vmin=vmin_, vmax=vmax_)
+
+    # Data
+    scd = axd.imshow(data, **{**prop,**kwargs})
+    fig.colorbar(scd, cax=cax)
+    # Model
+    scm = axm.imshow(model, **prop)
+    fig.colorbar(scm, cax=cax)
+    # Dif
+    scr = axr.imshow(residual, **{**prop,**{"vmin":cvmin_, "vmax":cvmax_}, **kwargs})
+    fig.colorbar(scr, cax=caxr)
+
+    [[ax_.set_xticks([]),ax_.set_yticks([])] for ax_ in axes]
+    [ax_.tick_params(labelsize="small") for ax_ in caxes]
+    # - Text
+    if show_text:
+        axd.text(-0.02, 0.5, f"index: {index} (x={star_plotted.image.center.x}, y={star_plotted.image.center.y})",
+                 transform=axd.transAxes, rotation=90, va="center", ha="right", fontsize="x-small", color="0.3")
+        
+    return fig, axes, caxes
+
+
 # End of plots.py ========================================================
+
+
+
+    

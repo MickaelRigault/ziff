@@ -8,7 +8,7 @@ import warnings
 from dask import delayed
 
 from ztfquery import io
-from ziff.psffitter import ZIFFFitter
+from ziff.base import ZIFF
 
 
 def _parse_addfilters_(addfilter):
@@ -23,6 +23,8 @@ def _parse_addfilters_(addfilter):
                     for addfilter_ in addfilter       
             }
 
+def _not_delayed_(func):
+    return func
 # ================= #
 #  SCRIPT STEPS     #
 # ================= #
@@ -32,7 +34,7 @@ def get_ziff(sciimg_files, mskimg_files=None, logger=None, fetch_psf=False, conf
     if verbose:
         print(" == 2 == Loading ZIFF")
         
-    ziff_ = ZIFFFitter(sciimg=sciimg_files,mskimg=mskimg_files,
+    ziff_ = ZIFF(sciimg=sciimg_files,mskimg=mskimg_files,
                         logger=logger, fetch_psf=fetch_psf, config=config)
     if load_background:
         ziff_.load_image_sourcebackground()
@@ -53,15 +55,19 @@ def get_catalog(ziff, catalog, boundpad=50, addfilter=None, filtered=True, xyfor
         print(f"* addition filter to apply on the catalog: {add_filter}")
     else:
         print("No additional catalog filtering")
-
         
-    if catalog in ["ps1cal"]:
-        catalog = "ps1cal"
-        ziff.fetch_ps1cal_catalog(name="ps1cal", bound_padding=boundpad, isolationlimit=isolationlimit)
-    else:
-        raise NotImplementedError("only ps1cal catalog has been implemented {args.catalog} given")
+    if catalog not in ["ps1cal", "gaia"]:
+        raise NotImplementedError(f"only ps1cal and gaia catalog have been implemented {catalog} given")
+    # Fetch only if necessary
+    elif catalog in ["ps1cal"] and "ps1cal" not in ziff.catalog:
+        ziff.fetch_ps1cal_catalog(name="ps1cal", bound_padding=boundpad,
+                                      isolationlimit=isolationlimit)
+    elif catalog in ["gaia"] and "gaia" not in ziff.catalog:
+        ziff.fetch_gaia_catalog(name="gaia", bound_padding=boundpad,
+                                    isolationlimit=isolationlimit)
 
-    cat_to_fit = ziff.get_catalog(catalog, add_filter=add_filter, xyformat=xyformat, filtered=filtered)
+    cat_to_fit = ziff.get_catalog(catalog, add_filter=add_filter, xyformat=xyformat,
+                                      filtered=filtered)
     cat_to_fit.change_name(f"{catalog}_tofit")
     return cat_to_fit
 
@@ -108,45 +114,49 @@ def checkout_ziffit(psf, shapes):
 # ================= #
 #    MAIN           #
 # ================= #
-def dask_ziffit(files, catalog="ps1cal", 
-                fit_filter=[["gmag",14,16]],
-                shape_catfilter=[["gmag",14,19]],
-                **kwargs):
+def ziffit(files, catalog="gaia", use_dask=True,
+            fit_filter=[["Gmag",14,16]],
+            shape_catfilter=[["Gmag",14,19]],
+            **kwargs):
     """ """
     psfs = []
     for i,file_ in enumerate(files):
-        psf_ = dask_single(file_, catalog=catalog,
-                         fit_filter=fit_filter,
-                         shape_catfilter=shape_catfilter,
-                         **kwargs)
+        psf_ = ziffit_single(file_, catalog=catalog, use_dask=use_dask,
+                                 fit_filter=fit_filter,
+                                 shape_catfilter=shape_catfilter,
+                                 **kwargs)
         psfs.append(psf_)
         
     return psfs # This is useless but final point
 
 
-def dask_single(file_, catalog="ps1cal", verbose=False,
+def ziffit_single(file_, catalog="gaia", verbose=False,
+                      use_dask=True,
                 dlfrom="irsa", allowdl=True, overwrite=True,
                 logger=None, fetch_psf=False, config="default",
-                boundpad=50,
-                fit_filter=[["gmag",14,16]],
-                shape_catfilter=[["gmag",14,19]],
+                boundpad=50, 
+                fit_filter=[["Gmag",14,16]],
+                shape_catfilter=[["Gmag",14,19]],
                 fit_isolationlimit=8, shape_isolationlimit=8,
-                piffit=True,
+                piffit=True, getshape=True,
                 minstars=30, nstars=300, interporder=3, maxoutliers=30):
     """ """
-    fitsciimg  = delayed(io.get_file)(file_, suffix="sciimg.fits", maxnprocess=1, dlfrom=dlfrom, 
-                                        overwrite=overwrite, downloadit=allowdl,
-                                        verbose=verbose, show_progress=False)
-    
-    fitmskimg  = delayed(io.get_file)(file_, suffix="mskimg.fits", maxnprocess=1, dlfrom=dlfrom, 
-                                        overwrite=overwrite, downloadit=allowdl,
-                                        verbose=verbose, show_progress=False)
+    delayedfunc = delayed if use_dask else _not_delayed_
 
-    ziff       = delayed(get_ziff)(fitsciimg, fitmskimg,
+    
+    fitsciimg  = delayedfunc(io.get_file)(file_, suffix="sciimg.fits", maxnprocess=1, dlfrom=dlfrom, 
+                                        overwrite=overwrite, downloadit=allowdl,
+                                        verbose=verbose, show_progress=False, squeez=True)
+    
+    fitmskimg  = delayedfunc(io.get_file)(file_, suffix="mskimg.fits", maxnprocess=1, dlfrom=dlfrom, 
+                                        overwrite=overwrite, downloadit=allowdl,
+                                        verbose=verbose, show_progress=False, squeez=True)
+    
+    ziff       = delayedfunc(get_ziff)(fitsciimg, fitmskimg,
                                     logger=logger, fetch_psf=fetch_psf, 
                                     config=config, verbose=verbose)
 
-    cat_to_fit = delayed(get_catalog)(ziff, catalog, 
+    cat_to_fit = delayedfunc(get_catalog)(ziff, catalog, 
                                         boundpad=boundpad, addfilter=fit_filter,
                                         isolationlimit=fit_isolationlimit,
                                         verbose=verbose)
@@ -154,79 +164,22 @@ def dask_single(file_, catalog="ps1cal", verbose=False,
     if not piffit:
         return cat_to_fit.npoints
     
-    psf       = delayed(run_piff)(ziff, cat_to_fit, 
+    psf       = delayedfunc(run_piff)(ziff, cat_to_fit, 
                                       minstars=minstars, nstars=nstars, interporder=interporder, 
                                       maxoutliers=maxoutliers,
-                                      verbose=verbose)
-    
-    cat_shape = delayed(get_catalog)(ziff, catalog, 
+                                     verbose=verbose)
+    if not getshape:
+        return psf
+
+    cat_shape = delayedfunc(get_catalog)(ziff, catalog, 
                                          boundpad=boundpad, 
                                          addfilter=shape_catfilter,
                                         isolationlimit=shape_isolationlimit,
                                          verbose=verbose)
 
-    shapes   = delayed(store_psfshape)(ziff, cat_shape, psf=psf,  getshape=True)
+    shapes   = delayedfunc(store_psfshape)(ziff, cat_shape, psf=psf,  getshape=True)
     
     # worked   = delayed(checkout_ziffit)(psf, shapes)
         
     # - output
     return shapes["sigma_stars"].mean()
-
-
-###
-
-def ziffit(files, catalog="ps1cal", 
-                fit_filter=[["gmag",14,16]],
-                shape_catfilter=[["gmag",14,19]],
-                **kwargs):
-    """ """
-    psfs = []
-    for i,file_ in enumerate(files):
-        psf_ = single(file_, catalog=catalog,
-                         fit_filter=fit_filter,
-                         shape_catfilter=shape_catfilter,
-                         **kwargs)
-        psfs.append(psf_)
-        
-    return np.asarray(psfs) # This is useless but final point
-
-
-def single(file_, catalog="ps1cal", verbose=False,
-                dlfrom="irsa", allowdl=True, 
-                logger=None, fetch_psf=False, config="default",
-                boundpad=50,
-                fit_filter=[["gmag",14,16]],
-                shape_catfilter=[["gmag",14,19]],
-                fit_isolationlimit=8, shape_isolationlimit=8,
-                minstars=30, nstars=300, interporder=3, maxoutliers=30):
-    """ """
-    fitimages  = get_file(file_, dlfrom=dlfrom, 
-                                       allowdl=allowdl, verbose=verbose, show_progress=False)
-
-    ziff       = get_ziff(fitimages[0], fitimages[1],
-                                 logger=logger, fetch_psf=fetch_psf, 
-                                config=config, verbose=verbose)
-
-    cat_to_fit = get_catalog(ziff, catalog,
-                                          boundpad=boundpad, addfilter=fit_filter,
-                                          isolationlimit=fit_isolationlimit,
-                                          verbose=verbose)
-    psf       = run_piff(ziff, cat_to_fit,
-                             minstars=minstars,
-                                      nstars=nstars, interporder=interporder, 
-                                      maxoutliers=maxoutliers,
-                                      verbose=verbose)
-    
-    cat_shape = get_catalog(ziff, catalog,
-                                         boundpad=boundpad, 
-                                         addfilter=shape_catfilter,
-                                        isolationlimit=shape_isolationlimit,
-                                         verbose=verbose)
-
-    shapes   = store_psfshape(ziff, cat_shape, psf=psf,  getshape=True)
-        
-    worked   = checkout_ziffit(psf, shapes)
-        
-    # - output
-    
-    return psf

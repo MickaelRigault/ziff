@@ -135,8 +135,7 @@ class StarCollection( object ):
                 
             else:
                 for s_ in getattr(self, which):
-                    s_.run_hsm()
-                    flux, center_x, center_y, sigma, shape_g1, shape_g2, flag = s_.run_hsm()
+                    flux, center_x, center_y, sigma, shape_g1, shape_g2, flag = s_.hsm
                 
                     shapes['flux'].append(flux)
                     #

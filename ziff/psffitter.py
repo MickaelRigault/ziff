@@ -49,74 +49,7 @@ class ZIFFFitter( ZIFF ):
     # --------- #
     #  PIFF     #
     # --------- #
-    def run_piff(self, catalog="default",
-                     minstars=30,
-                     catfileout=None, overwrite_cat=True,
-                     fitcatprop={}, suffle=False,
-                     on_filtered_cat=True,
-                     stampsize=None, nstars=None, interporder=None, maxoutliers=None,
-                     save_suffix='output.piff', verbose=False, store=True):
-        """ run the piff PSF algorithm on the given images using 
-        the given reference catalog (star location) 
-        
-        Parameters
-        ----------
-        catalog
-        """
-        # 0.
-        # - parse the input catalog
-        if type(catalog) is str and catalog in ["default", "gaia_calibration"]:
-            catalog = "gaia_calibration"
-            if catalog not in self.catalog:
-                self.fetch_calibration_catalog(name=catalog, **fitcatprop)
 
-        # - update the config:
-        if nstars is not None:
-            self.set_nstars(nstars)
-
-        if stampsize is not None:
-            self.set_stampsize(stampsize)
-            
-        if interporder is not None:
-            self.set_config_value('psf,interp,order', interporder)
-
-        if maxoutliers is not None:
-            self.set_config_value('psf,outliers,max_remove', maxoutliers)
-
-            
-        # 1.
-        # - Create the piff stars
-        stars, (fitcat, inputfile) = self.get_stars(catalog, fileout="default",
-                                                    filtered=on_filtered_cat,
-                                                    update_config=True, nstars=None,
-                                                    fullreturn=True, verbose=verbose)
-        if stars is None:
-            warnings.warn(f"No  star in the catalog used in run_piff (empty catalog)")
-            return None
-        elif len(stars)<minstars:
-            warnings.warn(f"Not enough star in the catalog used in run_piff ({len(stars)}<{minstars})")
-            return None
-        
-        # - and record the information
-        self._fitcatalog = fitcat
-        self.config['calibration_cat'] = self.fitcatalog.get_config()
-            
-        # 2.
-        # - Build the PSF object 
-        psf = piff.SimplePSF.process(self.config['psf'])
-        wcs, pointing = self.get_wcspointing(inputfile=inputfile)
-        # - and fit the PSF
-        psf.fit(stars, wcs, pointing, logger=self.logger)
-        
-        # 3.
-        # - Store the results
-        if store:
-            [psf.write(p + save_suffix) for p in self.get_prefix()]
-            [self.save_config(p + 'piff_config.json') for p in self.get_prefix()]
-            
-        # - save on the current object.
-        self.set_psf(psf)
-        return psf
 
     # -------- #
     # BUILDER  #
@@ -157,7 +90,8 @@ class ZIFFFitter( ZIFF ):
     # -------- #
     #  GETTER  #
     # -------- #
-    def fetch_gaia_catalog(self, gmag_range=[14,20],
+    def fetch_gaia_catalog(self,
+                               gmag_range=[14,20],
                             rpmag_range=None,
                              bpmag_range=None,
                              colormag_range=None,
@@ -204,6 +138,7 @@ class ZIFFFitter( ZIFF ):
     
     def compute_shapes(self, stars, save=False, save_suffix = 'shapes'):
         """ """
+        print("compute_shapes DEPRECATED")
         shapes = {'instru_flux': [], 'T_data': [], 'T_model': [],
                       'g1_data': [],'g2_data': [],'g1_model': [],
                       'g2_model': [],'u': [],'v': [],
