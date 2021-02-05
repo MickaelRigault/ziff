@@ -135,9 +135,9 @@ def ziffit_single(file_, catalog="gaia", verbose=False,
                 dlfrom="irsa", allowdl=True, overwrite=True,
                 logger=None, fetch_psf=False, config="default",
                 boundpad=50, 
-                fit_filter=[["Gmag",14,16]],
+                fit_filter=[["Gmag",15,16]],
                 shape_catfilter=[["Gmag",14,19]],
-                fit_isolationlimit=8, shape_isolationlimit=8,
+                fit_isolationlimit=10, shape_isolationlimit=10,
                 piffit=True, getshape=True,
                 minstars=30, nstars=300, interporder=3, maxoutliers=30):
     """ """

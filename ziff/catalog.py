@@ -52,8 +52,7 @@ def fetch_catalog(which, ra, dec, radius, r_unit="deg", **kwargs):
     return eval(f"fetch_{which}_catalog")(ra, dec, radius, r_unit=r_unit, **kwargs)
 
 def fetch_gaia_catalog(ra, dec, radius= 0.75, r_unit="deg",
-                        column_filters={'Gmag': '10..20'},
-                        as_catalog=True, name="gaia",
+                        column_filters={'Gmag': '10..20'}, name="gaia",
                         queryhost="vizier",
                         catname="I/350/gaiaedr3",
                         **kwargs):
@@ -132,7 +131,8 @@ def _fetch_gaia_catalog_vizier_(ra, dec, radius= 0.75, r_unit="deg",
     """
     
     from astroquery import vizier
-    columns = ["Source","RA_ICRS","e_RA_ICRS","DE_ICRS","e_ED_ICRS", "Gmag", "RPmag", "BPmag"]
+    columns = ["Source","RA_ICRS","e_RA_ICRS","DE_ICRS","e_ED_ICRS", "Gmag", "RPmag", "BPmag",
+                   "FG", "FRP", "FBP"]
     
     coord = SkyCoord(ra=ra,dec=dec, unit=(units.deg,units.deg))
     angle = Angle(radius, r_unit)
@@ -141,8 +141,6 @@ def _fetch_gaia_catalog_vizier_(ra, dec, radius= 0.75, r_unit="deg",
     # cache is False is necessary, notably when running in a computing center.
     gaiatable = v.query_region(coord, radius=angle, catalog=catname, cache=False).values()[0]
     gaiatable['colormag'] = gaiatable['BPmag'] - gaiatable['RPmag']
-    if not as_catalog:
-        return gaiatable
     
     return gaiatable.to_pandas().set_index('Source')
 
@@ -1472,6 +1470,7 @@ class _CatalogHolder_( object ):
                 
             catalog.write_to(writeto, **{**dict(filtered=False),
                                           **writetoprop})
+            catalog.filename = writeto
             
         return catalog
         

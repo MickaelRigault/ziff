@@ -290,6 +290,10 @@ class _ZIFFImageHolder_( _ZIFFLogConfig_ ):
         
         return ['_'.join(s.split('_')[0:-1])+'_' for s in self._sciimg]
 
+    def build_filename(self, basename, extension=".fits"):
+        """ """
+        return [l+f"{basename}{extension}" for l in self.get_prefix()]
+    
     def get_imagedata(self, which="data", **kwargs):
         """ high level method for accessing data, background or mask images.
         See also: get_data(), get_background(), get_mask() for additional tools.
@@ -872,8 +876,10 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         """
         # 1.
         # - parse catalog
-        cat, catfile = self._get_stored_catalog_(catalog, fileout=fileout, filtered=filtered,
+        cat = self.get_catalog(catalog, writeto=writeto, filtered=filtered,
                                                 **{**{"xyformat":"fortran"},**kwargs})
+        catfile = cat.filename
+        
         if cat.npoints == 0:
             warnings.warn("No entry in the given catalog, no stars to get.")
             if not fullreturn:
