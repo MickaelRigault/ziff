@@ -15,6 +15,66 @@ import piff
 from ztfimg import image as ztfimage
 
 from . import catalog
+
+
+def estimate_psf(ziff, catalog, interporder=None, store=True):
+    """ """
+    import piff
+    config = ziff.get_config(catfile=catalog.filename)
+    
+    if interporder is not None:
+        config["psf"]["interp"]["order"]=int(interporder)
+        
+    inputfile = piff.InputFiles(config["io"], logger=None)
+    inputfile.setPointing('RA','DEC')
+    wcs = inputfile.getWCS()
+    pointing = inputfile.getPointing()
+    stars = inputfile.makeStars(logger=None)
+    
+    psf = piff.SimplePSF.process(config['psf'])
+    psf.fit(stars, wcs, pointing, logger=None)
+    if store:
+        psfout = ziff.build_filename(get_psf_suffix(config), extension="")[0]
+        print(f"storing psf to : {psfout}")
+        psf.write(psfout)
+        
+    return psf
+
+def get_gaia_catalog(ziff, writeto="default", gmag_range=[15, 16]):
+    """ """
+    if "gaia" not in ziff.catalog:
+        print("loading gaia")
+        ziff.fetch_gaia_catalog(isolationlimit=10)
+        
+    cat_to_fit = ziff.get_catalog("gaia", filtered=True,shuffled=True, 
+                              writeto=writeto,
+                              add_filter={'gmag_outrange':['gmag', gmag_range]},
+                              xyformat="fortran")
+    
+    return cat_to_fit
+
+def get_psf_suffix(config, baseline="psf", extension=".piff"):
+    """ """
+    return f'{baseline}_{config["psf"]["model"]["type"]}_{config["psf"]["interp"]["type"]}{config["psf"]["interp"]["order"]}{extension}'
+
+def store_psfshape(ziff, catalog, psf, addfilter=None,
+                      verbose=True, getshape=True):
+    """ 
+    Parameters
+    ----------
+    psf: [piff.PSF or None]
+        if psf is None this returns None (Dask safe)
+
+    """
+    if verbose: print(f" Storing the PSF shapes.")
+    add_filter = _parse_addfilters_(addfilter)
+    nopsf = psf is None
+
+    shapes = ziff.get_psfshape(catalog, psf=psf, add_filter=add_filter, nopsf=nopsf)
+    
+    return ziff.store_psfshape(catalog, psf=psf, add_filter=add_filter,
+                                   getshape=getshape, nopsf=nopsf)
+
 ######################
 #                    #
 #  LOG & CONFIG      #
@@ -86,6 +146,7 @@ class _ZIFFLogConfig_( object ):
     # -------- #
     #  GETTER  #
     # -------- #
+    
     def get_piff_inputfile(self, catfile=None, ioconfig=None, verbose=False):
         """ get the PIFF input file given your logger and configurations 
         
@@ -545,16 +606,16 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
                     return cls(sciimg, **kwargs)
 
     def store_psfshape(self, catalog, psf=None, which=['stars', 'psfmodel'], filtered=True,
-                           add_imgprop=True, add_filter=None, fileout=None, getshape=False,
+                           add_imgprop=True, add_filter=None, writeto=None, getshape=False,
                            nopsf=False):
         """ """
         data = self.get_psfshape(catalog, psf=psf, which=which, filtered=filtered,
                                      add_imgprop=add_imgprop, add_filter=add_filter,
                                      nopsf=nopsf)
         if self.is_single():
-            if fileout is None:
-                fileout = self.prefix+'psfshape.csv' 
-            data.to_csv(fileout)
+            if writeto is None:
+                writeto = self.prefix+'psfshape.csv' 
+            data.to_csv(writeto)
         else:
             raise NotImplementedError("No shape datastorage implemented for non-single ziff.")
 
@@ -636,30 +697,54 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         
         self.set_catalog(catalog_, name=name)
 
+    def _fetch_calibrators_(self, which, name=None,
+                                setsky=True, setwcs=True, setmask=True,
+                                add_boundfilter=True, bound_padding=50,
+                                isolationlimit=10):
+        """ """
+        if name is None:
+            name = which
+            
+        dataframes = self._read_images_property_(f"get_{which}_calibrators", isfunc=True)
+        
+        if self.is_single():
+            catdata = catalog.Catalog(dataframes.rename(columns={"x":"xpos","y":"ypos"}),
+                                  name=name, xyformat="numpy")
+        else:
+            catlist = [catalog.Catalog(df_.rename(columns={"x":"xpos","y":"ypos"}), name=name_)
+                         for i,(df_,name_) in enumerate(zip(dataframes, self.get_prefix(True))) ]
+            catdata = catalog.CatalogCollection(catlist, load_data=True)
+
+
+        catalog_ = self._enrich_cat_(catdata,
+                                        name=name,
+                                        setsky=setsky, setwcs=setwcs, setmask=setmask,
+                                        add_boundfilter=add_boundfilter, bound_padding=bound_padding,
+                                        isolationlimit=isolationlimit)
+
+        return catalog_
+        
     def fetch_gaia_catalog(self, setit=True, name="gaia",
                                setsky=True, setwcs=True, setmask=True,
                                add_boundfilter=True, bound_padding=50,
-                               isolationlimit=None,
+                               isolationlimit=10,
                                gmag_range=[14,20],
                                rpmag_range=None,
                                bpmag_range=None,
                                colormag_range=None,
                                **kwargs):
         """ """
-        gaiacat = catalog.fetch_ziff_catalog(self, which="gaia", as_collection=True, **kwargs)
-        
-        catalog_ = self._enrich_cat_(gaiacat,
-                                    name=name,
-                                    setsky=setsky, setwcs=setwcs, setmask=setmask,
-                                    add_boundfilter=add_boundfilter, bound_padding=bound_padding,
-                                    isolationlimit=isolationlimit)
+        catalog_ = self._fetch_calibrators_("gaia", name=name,
+                                            setsky=setsky, setwcs=setwcs, setmask=setmask,
+                                            add_boundfilter=add_boundfilter, bound_padding=bound_padding,
+                                            isolationlimit=isolationlimit)
 
         if gmag_range is not None:
-            catalog_.add_filter('Gmag', gmag_range, name='gmag_outrange')
+            catalog_.add_filter('gmag', gmag_range, name='gmag_outrange')
         if rpmag_range is not None:
-            catalog_.add_filter('RPmag', rpmag_range, name='rpmag_outrange')
+            catalog_.add_filter('rpmag', rpmag_range, name='rpmag_outrange')
         if bpmag_range is not None:
-            catalog_.add_filter('BPmag', bpmag_range, name='bpmag_outrange')
+            catalog_.add_filter('bpmag', bpmag_range, name='bpmag_outrange')
         
         if colormag_range is not None:
             catalog_.add_filter('colormag', colormag_range, name='colormag_outrange')
@@ -673,25 +758,18 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
                                  name="ps1cal",
                                  setsky=True, setwcs=True, setmask=True,
                                  add_boundfilter=True, bound_padding=50,
-                                 isolationlimit=None,
+                                 isolationlimit=10,
                                  gmag_range=None, rmag_range=None,
                                  imag_range=None, zmag_range=None,
                                  ):
         """ """
-        dataframes = self._read_images_property_("get_ps1_calibrators", isfunc=True)
-        if self.is_single():
-            ps1cat = catalog.Catalog(dataframes.rename(columns={"x":"xpos","y":"ypos"}),
-                                  name="ps1cal", xyformat="numpy")
-        else:
-            catlist = [catalog.Catalog(df_.rename(columns={"x":"xpos","y":"ypos"}), name=name_)
-                         for i,(df_,name_) in enumerate(zip(dataframes, self.get_prefix(True))) ]
-            ps1cat = catalog.CatalogCollection(catlist, load_data=True)
+        catalog_ = self._fetch_calibrators_("ps1", name=name,
+                                                setsky=setsky, setwcs=setwcs, setmask=setmask,
+                                                add_boundfilter=add_boundfilter, bound_padding=bound_padding,
+                                                isolationlimit=isolationlimit,
+                                                )
 
-        catalog_ = self._enrich_cat_(ps1cat,
-                                    name=name,
-                                    setsky=setsky, setwcs=setwcs, setmask=setmask,
-                                    add_boundfilter=add_boundfilter, bound_padding=bound_padding,
-                                    isolationlimit=isolationlimit)
+        
         if gmag_range is not None:
             catalog_.add_filter('gmag', gmag_range, name='gmag_outrange')
         if rmag_range is not None:
@@ -740,6 +818,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
             catalog_.add_filter('is_isolated', True, name='not_isolated')
 
         return catalog_
+    
     # ------- #
     # GETTER  #
     # ------- #
@@ -852,7 +931,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
             return stamps, cat.get_data(filtered=filtered)
         return stamps
 
-    def get_stars(self, catalog, fileout="tmp", fullreturn=False,
+    def get_stars(self, catalog, writeto="tmp", fullreturn=False,
                       update_config=False, nstars="no_limit",
                       filtered=True, verbose=False, **kwargs):
         """ return PIFF stars for the given catalog using get_piff_inputfile().makeStars() 
@@ -860,7 +939,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         Parameters
         ----------
 
-        fileout: [string or None] -optional-
+        writeto: [string or None] -optional-
             how should the catalog file be stored to be passed to piff ?
             - 'tmp': temporary name: tmp_`bla`
             - None or 'default': using the cat.build_filename(prefix) method
@@ -938,7 +1017,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
 
     def get_psfmodel(self, catalog, filtered=True, normed=False, verbose=False):
         """ """
-        stars = self.get_stars(catalog, fileout="tmp",
+        stars = self.get_stars(catalog, writeto="tmp",
                                filtered=filtered, update_config=False,
                                fullreturn=False, verbose=verbose)
         
@@ -948,7 +1027,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
                          fit_center=False, show_progress=True, verbose=False):
         """ """
         print("Not clear if this should be used.")
-        stars, (fitcat, inputfile) = self.get_stars(catalog, fileout="tmp",
+        stars, (fitcat, inputfile) = self.get_stars(catalog, writeto="tmp",
                                                     filtered=filtered,
                                                     update_config=False,
                                                     fullreturn=True, verbose=verbose)
@@ -969,7 +1048,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
 
     def run_piff(self, catalog="default",
                      minstars=30,
-                     catfileout=None, overwrite_cat=True,
+                     catwriteto=None, overwrite_cat=True,
                      fitcatprop={}, suffle=False,
                      on_filtered_cat=True,
                      stampsize=None, nstars=None, interporder=None, maxoutliers=None,
@@ -998,7 +1077,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
             
         # 1.
         # - Create the piff stars
-        stars, (fitcat, inputfile) = self.get_stars(catalog, fileout="default",
+        stars, (fitcat, inputfile) = self.get_stars(catalog, writeto="default",
                                                     filtered=on_filtered_cat,
                                                     update_config=True, nstars=None,
                                                     fullreturn=True, verbose=verbose)
@@ -1032,6 +1111,7 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         # - save on the current object.
         self.set_psf(psf)
         return psf
+    
     # ------- #
     # PLOTTER #
     # ------- #

@@ -9,6 +9,8 @@ from dask import delayed
 
 from ztfquery import io
 from ziff.base import ZIFF
+from ziff import plots
+from ziff.utils import is_documented_by
 
 
 def _parse_addfilters_(addfilter):
@@ -72,7 +74,7 @@ def get_catalog(ziff, catalog, boundpad=50, addfilter=None, filtered=True, xyfor
     return cat_to_fit
 
 def run_piff(ziff, catalog, minstars=30, nstars=300, interporder=3, maxoutliers=30,
-                 verbose=True):
+                 verbose=True, store_fig=True):
     """ """
     if verbose:
         print(" == 4 == Running PIFF")
@@ -80,9 +82,19 @@ def run_piff(ziff, catalog, minstars=30, nstars=300, interporder=3, maxoutliers=
     ziff.set_config_value('psf,interp,order', interporder)
     ziff.set_config_value('psf,outliers,max_remove',maxoutliers)
     
-    return ziff.run_piff(catalog, minstars=minstars,
+    psf = ziff.run_piff(catalog, minstars=minstars,
                              on_filtered_cat=True, verbose=verbose)
-
+    if store_fig:
+        filepsffig = ziff.build_filename("psfresults", extension=".pdf")[0]
+        if verbose:
+            print(f"Storing the figure {filepsffig}")
+        try:
+            _ = ziff.show_psf(savefile=filepsffig)
+        except:
+            warnings.warn(f"cannot store the figure {filepsffig}")
+            
+    return psf
+    
 
 def store_psfshape(ziff, catalog, psf, addfilter=None,
                       verbose=True, getshape=True):
@@ -114,22 +126,6 @@ def checkout_ziffit(psf, shapes):
 # ================= #
 #    MAIN           #
 # ================= #
-def ziffit(files, catalog="gaia", use_dask=True,
-            fit_filter=[["Gmag",14,16]],
-            shape_catfilter=[["Gmag",14,19]],
-            **kwargs):
-    """ """
-    psfs = []
-    for i,file_ in enumerate(files):
-        psf_ = ziffit_single(file_, catalog=catalog, use_dask=use_dask,
-                                 fit_filter=fit_filter,
-                                 shape_catfilter=shape_catfilter,
-                                 **kwargs)
-        psfs.append(psf_)
-        
-    return psfs # This is useless but final point
-
-
 def ziffit_single(file_, catalog="gaia", verbose=False,
                       use_dask=True,
                 dlfrom="irsa", allowdl=True, overwrite=True,
@@ -169,7 +165,7 @@ def ziffit_single(file_, catalog="gaia", verbose=False,
                                       maxoutliers=maxoutliers,
                                      verbose=verbose)
     if not getshape:
-        return psf
+        return ziff
 
     cat_shape = delayedfunc(get_catalog)(ziff, catalog, 
                                          boundpad=boundpad, 
@@ -183,3 +179,14 @@ def ziffit_single(file_, catalog="gaia", verbose=False,
         
     # - output
     return shapes["sigma_stars"].mean()
+
+
+
+def ziffit(files, **kwargs):
+    """ """
+    psfs = []
+    for i,file_ in enumerate(files):
+        psf_ = ziffit_single(file_, **kwargs)
+        psfs.append(psf_)
+        
+    return psfs # This is useless but final point

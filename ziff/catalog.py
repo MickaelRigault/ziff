@@ -20,7 +20,9 @@ from ztfimg.stamps import stamp_it
 
 from ztfquery.io import CCIN2P3
 _CC = CCIN2P3(connect=False)
-        
+
+
+
 def fetch_ziff_catalog(ziff, which="gaia", as_collection=True, **kwargs):
     """ High level function that fetch the `which` catalog data for the given ziff.
     returns a CatalogCollection if allowed if the ziff is not a single ziff. 
@@ -144,7 +146,7 @@ def _fetch_gaia_catalog_vizier_(ra, dec, radius= 0.75, r_unit="deg",
     
     return gaiatable.to_pandas().set_index('Source')
 
-def dataframe_to_hdu(dataframe):
+def dataframe_to_hdu(dataframe, drop_notimplemented=True):
     """ converts a dataframe into a fits.BinTableHDU """
     # L: Logical (Boolean)
     # B: Unsigned Byte
@@ -161,16 +163,29 @@ def dataframe_to_hdu(dataframe):
     df = dataframe.reset_index()
     for _key in df.keys():
         type_ = df[_key].dtype
+        
+        if type_ == "object":
+            if drop_notimplemented:
+                warnings.warn(f"column type {type_} conversion to fits format not implemented | {_key} droped")
+                continue
+            raise NotImplementedError(f"column type {type_} conversion to fits format not implemented")
+        
         if type_ in ['int','int64',"Int64"]:
             format = 'K'
             value = df[_key].astype('int')
         elif type_ == 'float':
             format = 'D'
             value = df[_key].astype('float')
-        elif type_ in ['bool', 'boolean']:
+        elif type_ == 'bool' or type_ == 'boolean':
             format = 'L'
             value = df[_key].astype('bool')
+        elif type_ == 'string':
+            format = 'A'
+            value = df[_key].astype('string')
         else:
+            if drop_notimplemented:
+                warnings.warn(f"column type {type_} conversion to fits format not implemented | {_key} droped")
+                continue
             raise NotImplementedError(f"column type {type_} conversion to fits format not implemented")
         
         cols.append(fits.Column(name=_key, array=value, format=format, ascii=False))
@@ -363,8 +378,9 @@ class Catalog(object):
                                       index=dataframe.index, columns=dataframe.columns
                                      ).convert_dtypes() # fixes object dtype issues
                                      
-        self._data.astype(self._data.dtypes.replace('Int64','int64')) # avoids warnings
-        
+        if "Int64" in np.asarray(self._data.dtypes, dtype="str"):
+            self._data.astype(self._data.dtypes.replace('Int64','int64')) # avoids warnings
+            
         if 'filterout' not in self._data.columns:
             self._data['filterout'] = False
     
@@ -578,7 +594,7 @@ class Catalog(object):
     # -------- #
     
     # - Returns Copy
-    def get_catalog(self, filtered=False, shuffled=False, xyformat=None, name=None, **kwargs):
+    def get_catalog(self, filtered=False, shuffled=False, xyformat=None, name=None, index=None, **kwargs):
         """ Get the filtered version of the catalog 
         
         Returns
@@ -589,15 +605,16 @@ class Catalog(object):
             name = self.name
 
         new_data = self.get_data(filtered=filtered, shuffled=shuffled,
-                                     xyformat=xyformat,
+                                     xyformat=xyformat, index=index,
                                      as_hdu=False).copy()
+        mask = new_data["masked"].values
         if xyformat is None:
             xyformat = self.xyformat
             
         new_cat = self.__class__(new_data,
                                   name=name,
                                   wcs=self.wcs, header=self.header,
-                                  mask=self.mask[~self.filterout] if (filtered and self.mask is not None) else self.mask,
+                                  mask=mask,
                                   xyformat=xyformat,
                                   **kwargs)
         
@@ -625,7 +642,7 @@ class Catalog(object):
                                 **kwargs)
         
     # - Return DataFrame
-    def get_data(self, filtered=False, shuffled=False, xyformat=None, as_hdu=False):
+    def get_data(self, filtered=False, shuffled=False, xyformat=None, as_hdu=False, index=None):
         """ Basis of the catalog class. 
 
         Returns
@@ -638,7 +655,7 @@ class Catalog(object):
         d_ = self.data.copy()
         if len(d_)==0:
             return d_
-        
+            
         if xyformat is not None:
             origin = self._get_xyorigin_(xyformat)
             if origin != 0:
@@ -647,7 +664,10 @@ class Catalog(object):
                 
         if filtered:        
             d_ = d_[~self.filterout]
-        
+
+        if index is not None:
+            d_ = d_.loc[[i for i in index if i in d_.index]]
+
         if shuffled:
             d_ = d_.sample(frac=1)
         
@@ -1479,6 +1499,7 @@ class _CatalogHolder_( object ):
                                  add_filter=None, overwrite=True):
         """ """
         print("DEPRECATED, use get_catalog(writeto=)")
+        
         cat = self.get_catalog(catalog, chipnum=chipnum, xyformat=xyformat,
                                 shuffled=shuffled, filtered=filtered,
                                 add_filter=add_filter)
