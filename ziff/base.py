@@ -14,16 +14,24 @@ import piff
 # ZTFImage
 from ztfimg import image as ztfimage
 
-from . import catalog
+from . import catalog as catlib
 
 
-def estimate_psf(ziff, catalog, interporder=None, store=True):
+def estimate_psf(ziff, catalog,
+                     nstars=None, interporder=None, maxoutliers=None,
+                     store=True, verbose=True):
     """ """
     import piff
     config = ziff.get_config(catfile=catalog.filename)
     
     if interporder is not None:
         config["psf"]["interp"]["order"]=int(interporder)
+        
+    if maxoutliers is not None:
+        config['psf']["outliers"]['max_remove'] = int(maxoutliers)
+        
+    if nstars is not None:
+        config['io']['nstars'] = int(nstars)
         
     inputfile = piff.InputFiles(config["io"], logger=None)
     inputfile.setPointing('RA','DEC')
@@ -33,20 +41,24 @@ def estimate_psf(ziff, catalog, interporder=None, store=True):
     
     psf = piff.SimplePSF.process(config['psf'])
     psf.fit(stars, wcs, pointing, logger=None)
+    
     if store:
         psfout = ziff.build_filename(get_psf_suffix(config), extension="")[0]
-        print(f"storing psf to : {psfout}")
+        if verbose:
+            print(f"storing psf to : {psfout}")
         psf.write(psfout)
         
-    return psf
+    return psfs
 
-def get_gaia_catalog(ziff, writeto="default", gmag_range=[15, 16]):
+def get_gaia_catalog(ziff, writeto="default", gmag_range=[15, 16], isolationlimit=10,
+                         shuffled=True, verbose=True):
     """ """
     if "gaia" not in ziff.catalog:
-        print("loading gaia")
-        ziff.fetch_gaia_catalog(isolationlimit=10)
+        if verbose:
+            print("loading gaia")
+        ziff.fetch_gaia_catalog(isolationlimit=isolationlimit)
         
-    cat_to_fit = ziff.get_catalog("gaia", filtered=True,shuffled=True, 
+    cat_to_fit = ziff.get_catalog("gaia", filtered=True, shuffled=shuffled, 
                               writeto=writeto,
                               add_filter={'gmag_outrange':['gmag', gmag_range]},
                               xyformat="fortran")
@@ -67,7 +79,8 @@ def store_psfshape(ziff, catalog, psf, addfilter=None,
 
     """
     if verbose: print(f" Storing the PSF shapes.")
-    add_filter = _parse_addfilters_(addfilter)
+        
+    add_filter = catlib.parse_addfilters(addfilter)
     nopsf = psf is None
 
     shapes = ziff.get_psfshape(catalog, psf=psf, add_filter=add_filter, nopsf=nopsf)
@@ -553,7 +566,7 @@ class _ZIFFImageHolder_( _ZIFFLogConfig_ ):
         return (3080, 3072)
 
 
-class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
+class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
     
     def __init__(self, sciimg=None, mskimg=None, psffile=None,
                       logger=None, catalog=None,
@@ -659,9 +672,9 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
                           add_boundfilter=True, bound_padding=50,
                           isolationlimit=None,
                           **kwargs):
-        """ **kwargs goes to catalog.fetch_ziff_catalog() """
+        """ **kwargs goes to catlib.fetch_ziff_catalog() """
         print("fetch_catalog IS DEPRECATED")
-        catalog_ = catalog.fetch_ziff_catalog(self, which=which, as_collection=True, **kwargs)
+        catalog_ = catlib.fetch_ziff_catalog(self, which=which, as_collection=True, **kwargs)
         
         if catalog_.name is None:
             catalog_.change_name(which)
@@ -708,12 +721,12 @@ class ZIFF( _ZIFFImageHolder_, catalog._CatalogHolder_  ):
         dataframes = self._read_images_property_(f"get_{which}_calibrators", isfunc=True)
         
         if self.is_single():
-            catdata = catalog.Catalog(dataframes.rename(columns={"x":"xpos","y":"ypos"}),
+            catdata = catlib.Catalog(dataframes.rename(columns={"x":"xpos","y":"ypos"}),
                                   name=name, xyformat="numpy")
         else:
-            catlist = [catalog.Catalog(df_.rename(columns={"x":"xpos","y":"ypos"}), name=name_)
+            catlist = [catlib.Catalog(df_.rename(columns={"x":"xpos","y":"ypos"}), name=name_)
                          for i,(df_,name_) in enumerate(zip(dataframes, self.get_prefix(True))) ]
-            catdata = catalog.CatalogCollection(catlist, load_data=True)
+            catdata = catlib.CatalogCollection(catlist, load_data=True)
 
 
         catalog_ = self._enrich_cat_(catdata,

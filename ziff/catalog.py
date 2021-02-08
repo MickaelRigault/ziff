@@ -1483,10 +1483,15 @@ class _CatalogHolder_( object ):
         if writeto is not None:
             #
             # - Special cases
-            if writeto in ["default"]:
+            if writeto == "default":
                 writeto = catalog.build_filename(self.prefix)
-            elif  writeto in ["tmp"]:
+            elif  writeto == "shape":
+                writeto = catalog.build_filename(self.prefix+"shapecat_", extension=".fits")
+            elif  writeto == "prefixtmp":
+                writeto = catalog.build_filename(self.prefix+"tmpcat_", extension=".fits")
+            elif  writeto == "tmp":
                 writeto = catalog.build_filename("tmpcat_", extension=".fits")
+            
                 
             catalog.write_to(writeto, **{**dict(filtered=False),
                                           **writetoprop})

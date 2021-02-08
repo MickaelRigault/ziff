@@ -22,13 +22,6 @@ def running_from():
     except NameError:
         return None 
 
-
-def is_documented_by(original):
-  def wrapper(target):
-    target.__doc__ = original.__doc__
-    return target
-  return wrapper
-
     
 def avoid_duplicate(string_array):
     """ """
