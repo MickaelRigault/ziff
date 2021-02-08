@@ -17,7 +17,7 @@ packages = find_packages()
 print(f"packages to be installed: {packages}")
 
 
-VERSION = '0.2.9'
+VERSION = '0.3.0'
         
 setup(name='ziff',
       version=VERSION,

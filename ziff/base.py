@@ -69,6 +69,37 @@ def get_psf_suffix(config, baseline="psf", extension=".piff"):
     """ """
     return f'{baseline}_{config["psf"]["model"]["type"]}_{config["psf"]["interp"]["type"]}{config["psf"]["interp"]["order"]}{extension}'
 
+
+def get_shapes(ziff, psf, cat, store=True):
+    """ """
+    stars     = ziff.get_stars(cat, fullreturn=False)
+    starmodel = ziff.get_star_psfmodel(stars)
+    #
+    # - Information
+    columns   = "flux", "centeru", "centerv", "sigma", "shapeg1", "shapeg2", "flag"
+    catdata   = cat.data[["ra","dec","xpos","ypos", "gmag","e_gmag","sky"]]
+    
+    #
+    # - DataFrame
+    df_model  = pandas.DataFrame( np.asarray([s.hsm for s in starmodel]),
+                                      columns=columns, index=catdata.index)
+    df_data   = pandas.DataFrame( np.asarray([s.hsm for s in   stars  ]),
+                                      columns=columns, index=catdata.index)
+    
+    df_uv     = pandas.DataFrame(  [[s.u,s.v]       for s in   stars  ],
+                                      columns=["u","v"], index=catdata.index)
+    
+    #
+    # -
+    catdata.loc[catdata.index][["u","v"]] = uv
+    mshapes = pandas.merge(df_model, df_data, left_index=True, right_index=True, suffixes=("_data","_model"))
+    shapes = pandas.merge(mshapes, catdata,  left_index=True, right_index=True)
+    if store:
+        shape.to_parquet(self.build_filename("psfshape",".parquet")[0])
+        
+    return datashp
+        
+    
 def store_psfshape(ziff, catalog, psf, addfilter=None,
                       verbose=True, getshape=True):
     """ 
@@ -1016,7 +1047,7 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
     # ------- #
     # FITTER  #
     # ------- #
-    def get_star_psfmodel(self, stars, normed=False, asarray=False,
+    def get_stars_psfmodel(self, stars, normed=False, asarray=False,
                               modeldraw=False, basemodel=False, fit_center=False):
         """
         Parameters
@@ -1029,10 +1060,9 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         #
         # - Multiple Case, simply loop.
         if len(np.atleast_1d(stars))>1:
-            return [self.get_star_psfmodel(star_) for star_ in stars]
+            return [self.get_stars_psfmodel(star_) for star_ in stars]
 
-        from .star import get_star_psfmodel
-        return get_star_psfmodel(stars, self.psf, asarray=asarray, modeldraw=modeldraw, basemodel=basemodel, fit_center=fit_center)
+        return self.psf.drawStar(self.psf.interpolateStar( self.psf.model.initialize( stars )) )
 
     def get_psfmodel(self, catalog, filtered=True, normed=False, verbose=False):
         """ """
@@ -1040,7 +1070,7 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
                                filtered=filtered, update_config=False,
                                fullreturn=False, verbose=verbose)
         
-        return self.get_star_psfmodel(stars, normed=normed)
+        return self.get_stars_psfmodel(stars, normed=normed)
     
     def get_refluxed(self, catalog, filtered=True, which="piff",
                          fit_center=False, show_progress=True, verbose=False):
@@ -1209,7 +1239,7 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
 
         star = stars[index]
 
-        psfmodel = self.get_star_psfmodel(star)
+        psfmodel = self.get_stars_psfmodel(star)
         
         return show_psfmodeling(star, psfmodel,
                                     axes=axes, title=title, tight_layout=tight_layout,

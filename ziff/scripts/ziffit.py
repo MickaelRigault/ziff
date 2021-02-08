@@ -58,4 +58,8 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     # - Compute shapes
     catshp = delayed(base.get_gaia_catalog)(ziff, writeto="shape", gmag_range=shape_gmag,
                                                 shuffled=True)
-    return ziff, catshp
+    # shapes
+    shapes  = delayed(base.get_shapes)(ziff, psf, cat, store=True)
+    
+    return shapes[["sigma_model","sigma_data"]].median(axis=0).values
+    
