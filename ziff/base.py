@@ -94,8 +94,8 @@ def get_shapes(ziff, psf, cat, store=True):
     
     #
     # -
-    catdata.loc[catdata.index][["u","v"]] = uv
-    mshapes = pandas.merge(df_model, df_data, left_index=True, right_index=True, suffixes=("_data","_model"))
+    catdata.loc[catdata.index][["u","v"]] = df_uv
+    mshapes = pandas.merge(df_model, df_data, left_index=True, right_index=True, suffixes=("_model","_data"))
     shapes = pandas.merge(mshapes, catdata,  left_index=True, right_index=True)
     if store:
         shape.to_parquet(self.build_filename("psfshape",".parquet")[0])
