@@ -48,7 +48,7 @@ def estimate_psf(ziff, catalog,
             print(f"storing psf to : {psfout}")
         psf.write(psfout)
         
-    return psfs
+    return psf
 
 def get_gaia_catalog(ziff, writeto="default", gmag_range=[15, 16], isolationlimit=10,
                          shuffled=True, verbose=True):
