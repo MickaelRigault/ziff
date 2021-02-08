@@ -46,11 +46,11 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     ziff   = delayed(base.ZIFF)(sciimg, mkimg, fetch_psf=False)
     #
     # - Get the catalog    
-    cat    = delayed(base.get_gaia_catalog)(ziff, isolationlimit=isolationlimit,
+    catfit    = delayed(base.get_gaia_catalog)(ziff, isolationlimit=isolationlimit,
                                                 gmag_range=fit_gmag, shuffled=True)
     #
     # - Fit the PSF
-    psf    = delayed(base.estimate_psf)(ziff, cat,
+    psf    = delayed(base.estimate_psf)(ziff, catfit,
                                             interporder=interporder, nstars=nstars,
                                             maxoutliers=maxoutliers, verbose=False)
     #
@@ -58,7 +58,7 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     catshp = delayed(base.get_gaia_catalog)(ziff, writeto="shape", gmag_range=shape_gmag,
                                                 shuffled=True)
     # shapes
-    shapes  = delayed(base.get_shapes)(ziff, psf, cat, store=True)
+    shapes  = delayed(base.get_shapes)(ziff, psf, catshp, store=True)
     
     return shapes[["sigma_model","sigma_data"]].median(axis=0).values
     

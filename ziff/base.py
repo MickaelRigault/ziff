@@ -74,8 +74,21 @@ def get_psf_suffix(config, baseline="psf", extension=".piff"):
 def get_shapes(ziff, psf, cat, store=True):
     """ """
     ziff.set_psf(psf)
-        
     stars     = ziff.get_stars(cat, fullreturn=False)
+    
+    if len(stars) > cat.npoints:
+        # This should never happen
+        raise ValueError("This is unexpected, more stars than cat entries....")
+    if len(stars) < cat.npoints:
+        # Matching them to discard the missing cat entries
+        from astropy import coordinates
+        skycat = coordinates.SkyCoord(*cat.data[["xpos","ypos"]].values.T, unit="arcsec")
+        sstars = coordinates.SkyCoord([[s.image_pos.x, s.image_pos.y] for s in stars], unit="arcsec")
+        catalog_idx, self_idx, d2d, d3d = scat.search_around_sky(sstars,seplimit=0.5*units.arcsec)
+        npoints_star = cat.npoints
+        cat = cat.get_catalog(index = cat.data.index[self_idx], shuffled=False)
+        warnings.warn(f"{npoints_star-cat.npoints}/{npoints_star} have been drop from the cat when loading stars.")
+        
     starmodel = ziff.get_stars_psfmodel(stars)
     #
     # - Information
@@ -103,24 +116,6 @@ def get_shapes(ziff, psf, cat, store=True):
     return shapes
         
     
-def store_psfshape(ziff, catalog, psf, addfilter=None,
-                      verbose=True, getshape=True):
-    """ 
-    Parameters
-    ----------
-    psf: [piff.PSF or None]
-        if psf is None this returns None (Dask safe)
-
-    """
-    if verbose: print(f" Storing the PSF shapes.")
-        
-    add_filter = catlib.parse_addfilters(addfilter)
-    nopsf = psf is None
-
-    shapes = ziff.get_psfshape(catalog, psf=psf, add_filter=add_filter, nopsf=nopsf)
-    
-    return ziff.store_psfshape(catalog, psf=psf, add_filter=add_filter,
-                                   getshape=getshape, nopsf=nopsf)
 
 ######################
 #                    #
