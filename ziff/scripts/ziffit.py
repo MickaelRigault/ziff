@@ -4,9 +4,11 @@ import os
 import warnings
 import numpy as np
 
+from ztfquery import io
+from .. import base
 
 from dask import delayed
-from .. import __version__
+#from .. import __version__
 
 
 def limit_numpy(nthreads=4):
