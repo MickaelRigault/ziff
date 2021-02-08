@@ -58,4 +58,4 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     # - Compute shapes
     catshp = delayed(base.get_gaia_catalog)(ziff, writeto="shape", gmag_range=shape_gmag,
                                                 shuffled=True)
-    return ziff.set_psf(psf), catshp
+    return ziff, catshp
