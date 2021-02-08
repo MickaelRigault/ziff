@@ -82,11 +82,11 @@ def get_shapes(ziff, psf, cat, store=True):
     if len(stars) < cat.npoints:
         # Matching them to discard the missing cat entries
         from astropy import coordinates
-        skycat = coordinates.SkyCoord(*cat.data[["xpos","ypos"]].values.T, unit="arcsec")
-        sstars = coordinates.SkyCoord([[s.image_pos.x, s.image_pos.y] for s in stars], unit="arcsec")
-        catalog_idx, self_idx, d2d, d3d = scat.search_around_sky(sstars,seplimit=0.5*units.arcsec)
+        skycat   = coordinates.SkyCoord(*cat.data[["xpos","ypos"]].values.T, unit="arcsec")
+        skystars = coordinates.SkyCoord([[s.image_pos.x, s.image_pos.y] for s in stars], unit="arcsec")
+        catalog_idx, self_idx, d2d, d3d = skycat.search_around_sky(skystars,seplimit=0.2*units.arcsec)
         npoints_star = cat.npoints
-        cat = cat.get_catalog(index = cat.data.index[self_idx], shuffled=False)
+        cat = cat.get_catalog(index=cat.data.index[self_idx], shuffled=False)
         warnings.warn(f"{npoints_star-cat.npoints}/{npoints_star} have been drop from the cat when loading stars.")
         
     starmodel = ziff.get_stars_psfmodel(stars)
