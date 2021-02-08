@@ -73,7 +73,7 @@ def get_psf_suffix(config, baseline="psf", extension=".piff"):
 def get_shapes(ziff, psf, cat, store=True):
     """ """
     stars     = ziff.get_stars(cat, fullreturn=False)
-    starmodel = ziff.get_star_psfmodel(stars)
+    starmodel = ziff.get_stars_psfmodel(stars)
     #
     # - Information
     columns   = "flux", "centeru", "centerv", "sigma", "shapeg1", "shapeg2", "flag"
