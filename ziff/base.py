@@ -969,7 +969,7 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         # 1.
         # - parse catalog
         if type(catalog) == catlib.Catalog and catalog.has_filename() and os.path.isfile(catalog.filename) \
-          and cat.xyformat == "fortran":
+          and catalog.xyformat == "fortran":
             print("Input catalog ready")
             cat = catalog # ready
         else:
