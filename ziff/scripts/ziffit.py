@@ -7,7 +7,7 @@ import numpy as np
 from ztfquery import io
 from .. import base
 
-from dask import delayed
+import dask
 #from .. import __version__
 
 
