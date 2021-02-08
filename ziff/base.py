@@ -8,6 +8,7 @@ import numpy as np
 import logging
 import json
 import warnings
+import pandas
 # PIFF 
 import piff
 
