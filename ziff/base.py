@@ -968,8 +968,14 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         """
         # 1.
         # - parse catalog
-        cat = self.get_catalog(catalog, writeto=writeto, filtered=filtered,
+        if type(catalog) == catlib.Catalog and catalog.has_filename() and os.path.isfile(catalog.filename) \
+          and cat.xyformat == "fortran":
+            print("Input catalog ready")
+            cat = catalog # ready
+        else:
+            cat = self.get_catalog(catalog, writeto=writeto, filtered=filtered,
                                                 **{**{"xyformat":"fortran"},**kwargs})
+            
         catfile = cat.filename
         
         if cat.npoints == 0:

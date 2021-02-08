@@ -291,7 +291,7 @@ class Catalog(object):
 
 
     def write_to(self, savefile, filtered=True, extension=None, overwrite=True,
-                     safeexit=False, **kwargs):
+                     safeexit=False, store_filename=True, **kwargs):
         """ generic saving function calling the dedicated format ones (to_fits, to_csv) """
         
         if os.path.isfile(savefile):
@@ -314,13 +314,13 @@ class Catalog(object):
 
         # - 
         if extension in ["fits",".fits"]:
-            self.to_fits(savefile, filtered=filtered, overwrite=overwrite, **kwargs)
+            self.to_fits(savefile, filtered=filtered, overwrite=overwrite, store_filename=store_filename,**kwargs)
         elif extension in ["csv",".csv"]:
-            self.to_csv(savefile, filtered=filtered, overwrite=overwrite, **kwargs)
+            self.to_csv(savefile, filtered=filtered, overwrite=overwrite, store_filename=store_filename, **kwargs)
         else:
             raise ValueError("Only fits and csv format implemented")
 
-    def to_fits(self, savefile, header=None, filtered=True, overwrite=False, shuffled=False):
+    def to_fits(self, savefile, header=None, filtered=True, overwrite=False, shuffled=False, store_filename=True):
         """ Store the catalog as a fits file. 
         
         Parameters
@@ -346,14 +346,23 @@ class Catalog(object):
         hdul.append( self.get_data(filtered=filtered, as_hdu=True, shuffled=shuffled) )
         # -> out
         hdul = fits.HDUList(hdul)
-        return hdul.writeto(savefile, overwrite=overwrite)
+        
+        out =  hdul.writeto(savefile, overwrite=overwrite)
+        if store_filename:
+            self.set_filename(savefile)
+            
+        return out
 
-    def to_csv(self, savefile, filtered=True, overwrite=False, shuffled=False, **kwargs):
+    def to_csv(self, savefile, filtered=True, overwrite=False, shuffled=False, store_filename=True, **kwargs):
         """ """
         if os.path.isfile(savefile) and not overwrite:
             raise IOError(f"Cannot overwrite {savefile}")
         df = self.get_data(filtered=filtered, shuffled=shuffled).reset_index()
-        df.to_csv(savefile, **kwargs)
+        out = df.to_csv(savefile, **kwargs)
+        if store_filename:
+            self.set_filename(savefile)
+            
+        return out
         
     # ================ #
     #   Methods        #
@@ -408,7 +417,14 @@ class Catalog(object):
         setattr(self,f"_{askey}", bkgd)
         if self.has_data():
             self.data[askey] = bkgd
+
+    def set_filename(self, filename, ignore_warning=False):
+        """ """
+        if self.has_filename() and not ignore_warning:
+            warnings.warn("you are overwritting the current filename {self.filename} by {filename}")
             
+        self._filename = filename
+        
     # -------- #
     #  LOADER  #
     # -------- #
@@ -865,6 +881,17 @@ class Catalog(object):
         """ Name of the catalog """
         return self._name
 
+    @property
+    def filename(self):
+        """ """
+        if not self.has_filename():
+            return None
+        return self._filename
+
+    def has_filename(self):
+        """ """
+        return hasattr(self,"_filename") and self._filename is not None
+    
     @property
     def data(self):
         """ catalog data """
@@ -1493,9 +1520,8 @@ class _CatalogHolder_( object ):
                 writeto = catalog.build_filename("tmpcat_", extension=".fits")
             
                 
-            catalog.write_to(writeto, **{**dict(filtered=False),
-                                          **writetoprop})
-            catalog.filename = writeto
+            catalog.write_to(writeto, store_filename=True, #stores as catalog.filename
+                                 **{**dict(filtered=False), **writetoprop})
             
         return catalog
         
