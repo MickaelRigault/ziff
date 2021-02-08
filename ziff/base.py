@@ -98,7 +98,7 @@ def get_shapes(ziff, psf, cat, store=True):
     mshapes = pandas.merge(df_model, df_data, left_index=True, right_index=True, suffixes=("_model","_data"))
     shapes = pandas.merge(mshapes, catdata,  left_index=True, right_index=True)
     if store:
-        shapes.to_parquet(self.build_filename("psfshape",".parquet")[0])
+        shapes.to_parquet(ziff.build_filename("psfshape",".parquet")[0])
         
     return shapes
         
