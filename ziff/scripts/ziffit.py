@@ -53,7 +53,6 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     psf    = delayed(base.estimate_psf)(ziff, cat,
                                             interporder=interporder, nstars=nstars,
                                             maxoutliers=maxoutliers, verbose=False)
-    ziff.set_psf(psf)
     #
     # - Compute shapes
     catshp = delayed(base.get_gaia_catalog)(ziff, writeto="shape", gmag_range=shape_gmag,

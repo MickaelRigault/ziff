@@ -72,6 +72,8 @@ def get_psf_suffix(config, baseline="psf", extension=".piff"):
 
 def get_shapes(ziff, psf, cat, store=True):
     """ """
+    ziff.set_psf(psf)
+        
     stars     = ziff.get_stars(cat, fullreturn=False)
     starmodel = ziff.get_stars_psfmodel(stars)
     #
