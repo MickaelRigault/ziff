@@ -81,7 +81,7 @@ def get_shapes(ziff, psf, cat, store=True):
         raise ValueError("This is unexpected, more stars than cat entries....")
     if len(stars) < cat.npoints:
         # Matching them to discard the missing cat entries
-        from astropy import coordinates
+        from astropy import coordinates, units
         skycat   = coordinates.SkyCoord(*cat.data[["xpos","ypos"]].values.T, unit="arcsec")
         skystars = coordinates.SkyCoord([[s.image_pos.x, s.image_pos.y] for s in stars], unit="arcsec")
         catalog_idx, self_idx, d2d, d3d = skycat.search_around_sky(skystars,seplimit=0.2*units.arcsec)
