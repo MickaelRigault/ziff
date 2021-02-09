@@ -5,10 +5,8 @@ import os
 import copy
 import warnings
 
-
 import pandas
 import numpy as np
-
 
 from astropy import units
 from astropy.io import fits #as aio
@@ -20,7 +18,6 @@ from ztfimg.stamps import stamp_it
 
 from ztfquery.io import CCIN2P3
 _CC = CCIN2P3(connect=False)
-
 
 
 def fetch_ziff_catalog(ziff, which="gaia", as_collection=True, **kwargs):
@@ -754,9 +751,11 @@ class Catalog(object):
 
     def get_datastamps(self, array, stampsize, filtered=False, xyformat="numpy"):
         """ """
-        return stamp_it(array,
-                            self.get_xpos(filtered=filtered, xyformat=xyformat),
-                            self.get_ypos(filtered=filtered, xyformat=xyformat),
+        xpos = self.get_xpos(filtered=filtered, xyformat=xyformat)
+        ypos = self.get_ypos(filtered=filtered, xyformat=xyformat)
+        if len(xpos)==0:
+            ValueError("size of xpos is zero.")
+        return stamp_it(array, xpos, ypos,
                         dx=stampsize, asarray=True)
     
         
