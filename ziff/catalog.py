@@ -1517,7 +1517,8 @@ class _CatalogHolder_( object ):
                 writeto = catalog.build_filename(self.prefix+"tmpcat_", extension=".fits")
             elif  writeto == "tmp":
                 writeto = catalog.build_filename("tmpcat_", extension=".fits")
-            
+                
+            print(f"Storing catalog to {writeto}")
                 
             catalog.write_to(writeto, store_filename=True, #stores as catalog.filename
                                  **{**dict(filtered=False), **writetoprop})
