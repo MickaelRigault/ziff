@@ -74,7 +74,7 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     cat_toshape= cats[1]
     #
     # - Fit the PSF
-    psf    = delayed(base.estimate_psf)(ziff, cat_tofit,
+    psf    = delayed(base.estimate_psf)(ziff, cat_toshape,
                                             interporder=interporder, nstars=nstars,
                                             maxoutliers=maxoutliers, verbose=False)
     # shapes
