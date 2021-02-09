@@ -38,9 +38,9 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     #
     # - Get Files
     sciimg = delayed(io.get_file)(file_, suffix="sciimg.fits", overwrite=overwrite, 
-                                      show_progress=~use_dask)
+                                      show_progress= not use_dask)
     mkimg  = delayed(io.get_file)(file_, suffix="mskimg.fits", overwrite=overwrite,
-                                      show_progress=~use_dask)
+                                      show_progress= not use_dask)
     #
     # - Build Ziff    
     ziff   = delayed(base.ZIFF)(sciimg, mkimg, fetch_psf=False)
