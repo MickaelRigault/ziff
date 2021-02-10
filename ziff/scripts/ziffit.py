@@ -82,3 +82,28 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     
     return shapes[["sigma_model","sigma_data"]].median(axis=0).values
     
+
+
+def compute_shapes(file_, use_dask=False, numpy_threads=None):
+    """ """
+    if numpy_threads is not None:
+        limit_numpy(nthreads=numpy_threads)
+
+    delayed = dask.delayed if use_dask else _not_delayed_
+
+
+    files_needed = delayed(io.get_file)(file_, suffix=["psf_PixelGrid_BasisPolynomial3.piff", 
+                                                       "sciimg.fits", "mskimg.fits",
+                                                       "shapecat_gaia.fits"], check_suffix=False)
+    
+    psffile, sciimg, mkimg, catfile = files_needed
+
+    ziff         = delayed(base.ZIFF)(sciimg, mkimg, fetch_psf=False)
+    cat_toshape  = delayed(base.catlib.Catalog.load)(catfile, wcs=ziff.wcs)
+    psf          = delayed(base.piff.PSF.read)(file_name=psffile, logger=None)
+
+    shapes       = delayed(base.get_shapes)(ziff, psf, cat_toshape, store=True)
+    
+    return shapes[["sigma_model","sigma_data"]].median(axis=0).values
+
+    

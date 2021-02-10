@@ -75,6 +75,7 @@ def get_shapes(ziff, psf, cat, store=True):
     """ """
     ziff.set_psf(psf)
     stars     = ziff.get_stars(cat, fullreturn=False)
+
     
     if len(stars) > cat.npoints:
         # This should never happen
@@ -189,7 +190,7 @@ class _ZIFFLogConfig_( object ):
     #  GETTER  #
     # -------- #
     
-    def get_piff_inputfile(self, catfile=None, ioconfig=None, verbose=False):
+    def get_piff_inputfile(self, catfile=None, imagefile=None, ioconfig=None, verbose=False):
         """ get the PIFF input file given your logger and configurations 
         
         ioconfig: [dict]  -optional-
@@ -198,11 +199,8 @@ class _ZIFFLogConfig_( object ):
         
         """
         if ioconfig is None:
-            ioconfig = self.config['io']
-            
-        if catfile is not None:
-            ioconfig['cat_file_name'] = list(np.atleast_1d(catfile))
-            
+            ioconfig = self.get_config(catfile=catfile, imagefile=imagefile)['io']
+                        
         if verbose:
             print(ioconfig)
             
@@ -974,7 +972,7 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         return stamps
 
     def get_stars(self, catalog, writeto="tmp", fullreturn=False,
-                      update_config=False, nstars="no_limit",
+                      nstars="no_limit", imagefile=None,
                       filtered=True, verbose=False, **kwargs):
         """ return PIFF stars for the given catalog using get_piff_inputfile().makeStars() 
 
@@ -1015,11 +1013,9 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         
         # 2.
         # - build the piff input file using a copy of the i/o config
-        if not update_config:
-            ioconfig = self.get_config_value("io").copy()
-        else:
-            ioconfig = self.get_config_value("io")
-
+        
+        ioconfig = self.get_config(imagefile=imagefile,catfile=catfile)["io"]
+        
         #
         if nstars is not None:
             if type(nstars) is str:
@@ -1030,7 +1026,6 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
             else:
                 ioconfig["nstars"] = nstars
             
-        ioconfig['cat_file_name'] = list(np.atleast_1d(catfile))
         inputfile = self.get_piff_inputfile(ioconfig=ioconfig, verbose=verbose)
 
         # 3.

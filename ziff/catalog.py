@@ -198,7 +198,7 @@ def dataframe_to_hdu(dataframe, drop_notimplemented=True):
 class Catalog(object):
     
     def __init__(self, dataframe=None, name=None, wcs=None, header=None, mask=None,
-                     xyformat=None):
+                     xyformat=None, filename=None):
         """ """
         self._name = name
         self._filters = {}
@@ -215,6 +215,9 @@ class Catalog(object):
         if mask is not None:
             self.set_mask(mask)
 
+        if filename is not None:
+            self.set_filename(filename)
+            
         self._xyformat = xyformat
             
     def __str__(self):
@@ -251,10 +254,10 @@ class Catalog(object):
         filename = filename[0]
         extension = filename.split(".")[-1]
         if extension in ["csv"]:
-            return cls.read_cvs(read_cvs, name=name, wcs=wcs, header=header, mask=mask, **kwargs)
+            return cls.read_cvs(filename, name=name, wcs=wcs, header=header, mask=mask, **kwargs)
         
         if extension in ["fits"]:
-            return cls.read_fits(read_cvs, name=name, wcs=wcs, header=header, mask=mask, **kwargs)
+            return cls.read_fits(filename, name=name, wcs=wcs, header=header, mask=mask, **kwargs)
 
         raise ValueError("only csv and fits loading implemented.")
             
@@ -262,7 +265,7 @@ class Catalog(object):
     def read_cvs(cls, filename, name="catalog", index_col=None, readprop={}, **kwargs):
         """ """
         return cls( dataframe=pandas.read_csv(filename, index_col=index_col, **readprop),
-                        name=name, **kwargs)
+                        name=name, filename=filename, **kwargs)
 
     @classmethod
     def read_fits(cls, filename, dataext=1, headerext=None, name="catalog",
@@ -277,7 +280,7 @@ class Catalog(object):
         if index_col is not None:
             dataframe = dataframe.set_index(index_col)
             
-        this = cls(dataframe, name=name, **kwargs)
+        this = cls(dataframe, name=name, filename=filename, **kwargs)
         this.set_header(header)
         return this
     
@@ -575,7 +578,9 @@ class Catalog(object):
         else:
             np_xpos, np_ypos = self.wcs.world_to_pixel_values(self.get_ra(filtered=False),
                                                        self.get_dec(filtered=False))
-            shift = np.unique(self.data[self._xposkey] - np_xpos)
+            # Around avoids float digit issues after storing and loading.
+            shift = np.unique(np.around(self.data[self._xposkey] - np_xpos, 2) )
+                
             
             if len(shift)>1:
                 raise ValueError(f"non-constant offset when guessing the xyformat. This unexpected. shift: {shift}")
