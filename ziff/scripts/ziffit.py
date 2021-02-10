@@ -96,7 +96,7 @@ def compute_shapes(file_, use_dask=False, numpy_threads=None):
                                                        "sciimg.fits", "mskimg.fits",
                                                        "shapecat_gaia.fits"], check_suffix=False)
     
-    psffile, sciimg, mkimg, catfile = files_needed
+    psffile, sciimg, mkimg, catfile = files_needed[0],files_needed[1],files_needed[2],files_needed[3]
 
     ziff         = delayed(base.ZIFF)(sciimg, mkimg, fetch_psf=False)
     cat_toshape  = delayed(base.catlib.Catalog.load)(catfile, wcs=ziff.wcs)
