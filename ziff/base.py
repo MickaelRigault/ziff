@@ -108,9 +108,14 @@ def get_shapes(ziff, psf, cat, store=True):
     
     #
     # -
-    catdata.loc[catdata.index][["u","v"]] = df_uv
+    catdata = pandas.merge(catdata, df_uv, left_index=True, right_index=True)
     mshapes = pandas.merge(df_model, df_data, left_index=True, right_index=True, suffixes=("_model","_data"))
+    
     shapes = pandas.merge(mshapes, catdata,  left_index=True, right_index=True)
+    # Add image information
+    keys = ["ccdid","qid","rcid","obsjd","fieldid","filterid","maglim"]
+    shapes[keys] = [getattr(ziff,k_) for k_ in keys]
+    
     if store:
         shapes.to_parquet(ziff.build_filename("psfshape",".parquet")[0])
         
@@ -566,6 +571,26 @@ class _ZIFFImageHolder_( _ZIFFLogConfig_ ):
     def rcid(self):
         """ RC ID of the loaded images (quandrant ID and ccd ID) """
         return self._read_images_property_("rcid")
+
+    @property
+    def obsjd(self):
+        """ ccd ID of the loaded images """
+        return self._read_images_property_("obsjd")
+    
+    @property
+    def fieldid(self):
+        """ ccd ID of the loaded images """
+        return self._read_images_property_("fieldid")
+    
+    @property
+    def filterid(self):
+        """ ccd ID of the loaded images """
+        return self._read_images_property_("filterid")
+    
+    @property
+    def maglim(self):
+        """ ccd ID of the loaded images """
+        return self._read_images_property_("maglim")
 
     @property
     def prefix(self):
