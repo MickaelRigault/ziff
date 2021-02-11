@@ -47,15 +47,6 @@ def get_ziffit_gaia_catalog(ziff, isolationlimit=10,
     return cat_to_fit,cat_to_shape
 
 
-def get_file_wait(file_, waittime=None,
-                    suffix=None, overwrite=False, show_progress=True, **kwargs):
-    """ """
-    if waittime is not None:
-        time.sleep(waittime)
-        
-    return io.get_file(file_, suffix="sciimg.fits", overwrite=overwrite, 
-                           show_progress=show_progress, **kwargs)
-
 def ziffit_single(file_, use_dask=False, overwrite=False,
                       isolationlimit=10, waittime=None,
                       nstars=300, interporder=3, maxoutliers=None, 
@@ -68,11 +59,16 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     delayed = dask.delayed if use_dask else _not_delayed_
 
     #
+    # - Waiting time is any
+    if waittime is not None:
+        time.sleep(waittime)
+
+    #
     # - Get Files
-    sciimg = delayed(get_file_wait)(file_, waittime=waittime,
+    sciimg = delayed(io.get_file)(file_, waittime=waittime,
                                         suffix="sciimg.fits", overwrite=overwrite, 
                                         show_progress= not use_dask)
-    mkimg  = delayed(get_file_wait)(file_, waittime=waittime,
+    mkimg  = delayed(io.get_file)(file_, waittime=waittime,
                                         suffix="mskimg.fits", overwrite=overwrite,
                                         show_progress= not use_dask)
     #
