@@ -54,7 +54,7 @@ def get_file_wait(file_, waittime=None,
         time.sleep(waittime)
         
     return io.get_file(file_, suffix="sciimg.fits", overwrite=overwrite, 
-                           show_progress= not use_dask, **kwargs)
+                           show_progress=show_progress, **kwargs)
 
 def ziffit_single(file_, use_dask=False, overwrite=False,
                       isolationlimit=10, waittime=None,
