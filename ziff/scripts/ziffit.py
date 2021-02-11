@@ -48,7 +48,7 @@ def get_ziffit_gaia_catalog(ziff, isolationlimit=10,
 
 
 def get_file_delayed(file_, waittime=None,
-                         suffix=["sciimg.fits","mskimg.fits"], overwrite=overwrite, 
+                         suffix=["sciimg.fits","mskimg.fits"], overwrite=False, 
                          show_progress=True, maxnprocess=1, **kwargs):
     """ """
     if waittime is not None:
