@@ -50,7 +50,7 @@ def get_ziffit_gaia_catalog(ziff, isolationlimit=10,
 def get_file_wait(file_, waittime=None,
                     suffix=None, overwrite=False, show_progress=True, **kwargs):
     """ """
-    if waittime is None:
+    if waittime is not None:
         time.sleep(waittime)
         
     return io.get_file(file_, suffix="sciimg.fits", overwrite=overwrite, 
