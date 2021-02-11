@@ -47,6 +47,18 @@ def get_ziffit_gaia_catalog(ziff, isolationlimit=10,
     return cat_to_fit,cat_to_shape
 
 
+def get_file_delayed(file_, waittime=None,
+                         suffix=["sciimg.fits","mskimg.fits"], overwrite=overwrite, 
+                         show_progress=True, maxnprocess=1, **kwargs):
+    """ """
+    if waittime is not None:
+        time.sleep(waittime)
+        
+    return io.get_file(file_, waittime=waittime,
+                        suffix=suffix, overwrite=overwrite, 
+                        show_progress=show_progress, maxnprocess=maxnprocess)
+    
+
 def ziffit_single(file_, use_dask=False, overwrite=False,
                       isolationlimit=10, waittime=None,
                       nstars=300, interporder=3, maxoutliers=None, 
@@ -60,17 +72,16 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
 
     #
     # - Waiting time is any
-    if waittime is not None:
-        time.sleep(waittime)
-
     #
     # - Get Files
-    sciimg = delayed(io.get_file)(file_, waittime=waittime,
-                                        suffix="sciimg.fits", overwrite=overwrite, 
-                                        show_progress= not use_dask)
-    mkimg  = delayed(io.get_file)(file_, waittime=waittime,
-                                        suffix="mskimg.fits", overwrite=overwrite,
-                                        show_progress= not use_dask)
+
+    # - This way, first sciimg, then mskimg, this enables not to overlead IRSA.
+    sciimg_mkimg = delayed(get_file_delayed)(file_, waittime=waittime,
+                                                 suffix=["sciimg.fits","mskimg.fits"],
+                                                 overwrite=overwrite, 
+                                                 show_progress= not use_dask, maxnprocess=1)
+    sciimg = sciimg_mkimg[0]
+    mkimg  = sciimg_mkimg[1]
     #
     # - Build Ziff    
     ziff   = delayed(base.ZIFF)(sciimg, mkimg, fetch_psf=False)
