@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import os
 import warnings
+import time
 import numpy as np
 
 from ztfquery import io
@@ -46,8 +47,17 @@ def get_ziffit_gaia_catalog(ziff, isolationlimit=10,
     return cat_to_fit,cat_to_shape
 
 
+def get_file_wait(file_, waittime=None,
+                    suffix=None, overwrite=False, show_progress=True, **kwargs):
+    """ """
+    if waittime is None:
+        time.sleep(waittime)
+        
+    return io.get_file(file_, suffix="sciimg.fits", overwrite=overwrite, 
+                           show_progress= not use_dask, **kwargs)
+
 def ziffit_single(file_, use_dask=False, overwrite=False,
-                      isolationlimit=10,
+                      isolationlimit=10, waittime=None,
                       nstars=300, interporder=3, maxoutliers=None, 
                       fit_gmag=[15,16], shape_gmag=[15,19],
                       numpy_threads=None):
@@ -59,10 +69,12 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
 
     #
     # - Get Files
-    sciimg = delayed(io.get_file)(file_, suffix="sciimg.fits", overwrite=overwrite, 
-                                      show_progress= not use_dask)
-    mkimg  = delayed(io.get_file)(file_, suffix="mskimg.fits", overwrite=overwrite,
-                                      show_progress= not use_dask)
+    sciimg = delayed(get_file_wait)(file_, waittime=waittime,
+                                        suffix="sciimg.fits", overwrite=overwrite, 
+                                        show_progress= not use_dask)
+    mkimg  = delayed(get_file_wait)(file_, waittime=waittime,
+                                        suffix="mskimg.fits", overwrite=overwrite,
+                                        show_progress= not use_dask)
     #
     # - Build Ziff    
     ziff   = delayed(base.ZIFF)(sciimg, mkimg, fetch_psf=False)
@@ -95,7 +107,7 @@ def compute_shapes(file_, use_dask=False, numpy_threads=None):
     files_needed = delayed(io.get_file)(file_, suffix=["psf_PixelGrid_BasisPolynomial3.piff", 
                                                        "sciimg.fits", "mskimg.fits",
                                                        "shapecat_gaia.fits"], check_suffix=False)
-    
+    # Dask
     psffile, sciimg, mkimg, catfile = files_needed[0],files_needed[1],files_needed[2],files_needed[3]
 
     ziff         = delayed(base.ZIFF)(sciimg, mkimg, fetch_psf=False)
