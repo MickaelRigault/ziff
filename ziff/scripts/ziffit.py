@@ -145,22 +145,26 @@ def get_ziffit_gaia_catalog(ziff, isolationlimit=10,
         warnings.warn("No image in the given ziff")
         return None,None
 
-    if "gaia" not in ziff.catalog:
-        if verbose:
-            print("loading gaia")        
-        ziff.fetch_gaia_catalog(isolationlimit=isolationlimit)
+    try:
+        if "gaia" not in ziff.catalog:
+            if verbose:
+                print("loading gaia")        
+            ziff.fetch_gaia_catalog(isolationlimit=isolationlimit)
         
-    cat_to_fit   = ziff.get_catalog("gaia", filtered=True, shuffled=shuffled, 
+        cat_to_fit   = ziff.get_catalog("gaia", filtered=True, shuffled=shuffled, 
                               writeto="default",
                               add_filter={'gmag_outrange':['gmag', fit_gmag]},
                               xyformat="fortran")
     
-    cat_to_shape = ziff.get_catalog("gaia", filtered=True, shuffled=shuffled, 
+        cat_to_shape = ziff.get_catalog("gaia", filtered=True, shuffled=shuffled, 
                               writeto="shape",
                               add_filter={'gmag_outrange':['gmag', shape_gmag]},
                               xyformat="fortran")
     
-    return cat_to_fit,cat_to_shape
+        return cat_to_fit,cat_to_shape
+    except:
+        warnings.warn("Failed grabing the gaia catalogs, Nones returned")
+        return None,None
 
 
 def get_sigma_data(files, bins_u, bins_v, 
