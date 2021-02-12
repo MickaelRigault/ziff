@@ -54,7 +54,7 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     # shapes
     shapes  = delayed(base.get_shapes)(ziff, psf, cat_tofit, store=True)
     
-    return shapes[["sigma_model","sigma_data"]].median(axis=0).values
+    return delayed(_get_ziffit_output_)(shapes)
 
 def compute_shapes(file_, use_dask=False, numpy_threads=None):
     """ """
@@ -131,14 +131,23 @@ def limit_numpy(nthreads=4):
 def _not_delayed_(func):
     return func
 
+def _get_ziffit_output_(shapes):
+    """ """
+    if shapes is not None:
+        return shapes[["sigma_model","sigma_data"]].median(axis=0).values
+    return [None,None]
 
 def get_ziffit_gaia_catalog(ziff, isolationlimit=10,
                                 fit_gmag=[15, 16], shape_gmag=[15,18],
                                 shuffled=True, verbose=True):
     """ """
+    if not ziff.has_images():
+        warnings.warn("No image in the given ziff")
+        return None,None
+
     if "gaia" not in ziff.catalog:
         if verbose:
-            print("loading gaia")
+            print("loading gaia")        
         ziff.fetch_gaia_catalog(isolationlimit=isolationlimit)
         
     cat_to_fit   = ziff.get_catalog("gaia", filtered=True, shuffled=shuffled, 

@@ -22,6 +22,14 @@ def estimate_psf(ziff, catalog,
                      nstars=None, interporder=None, maxoutliers=None,
                      store=True, verbose=True):
     """ """
+    if not ziff.has_images():
+        warnings.warn("No image in the given ziff")
+        return None
+    
+    if catalog is None:
+        warnings.warn("No Catalog given")
+        return None
+
     import piff
     config = ziff.get_config(catfile=catalog.filename)
     
@@ -73,6 +81,18 @@ def get_psf_suffix(config, baseline="psf", extension=".piff"):
 
 def get_shapes(ziff, psf, cat, store=True):
     """ """
+    if not ziff.has_images():
+        warnings.warn("No image in the given ziff")
+        return None
+    
+    if psf is None:
+        warnings.warn("No psf given")
+        return None
+    
+    if cat is None:
+        warnings.warn("No Catalog given")
+        return None
+    
     ziff.set_psf(psf)
     stars     = ziff.get_stars(cat, fullreturn=False)
 
@@ -315,7 +335,8 @@ class _ZIFFImageHolder_( _ZIFFLogConfig_ ):
     # ================ #
     #   Methods        #
     # ================ #
-    def load_images(self, imagefile, maskfile=None, download=False):
+    def load_images(self, imagefile, maskfile=None, download=False,
+                        handle_nofiles=True):
         """ Builds the ztfimages from the given filepath and calls self.set_images() """
         from ztfimg import image
         
@@ -332,9 +353,10 @@ class _ZIFFImageHolder_( _ZIFFLogConfig_ ):
 
         # Build the ztfimage
         zimages = [ztfimage.ScienceImage.from_filename(image_, filenamemask=mask_, download=download)
-                         for (image_, mask_) in zip(imagefile, maskfile)]
-        
-        self.set_images(zimages)
+                         for (image_, mask_) in zip(imagefile, maskfile)
+                       if (handle_nofiles and os.path.isfile(image_))]
+        if len(zimages)>0:
+            self.set_images(zimages)
         
     # -------- #
     #  SETTER  #
