@@ -101,7 +101,7 @@ def build_digitalized_shape(filenames, urange, vrange, chunks=50, nbins=200,
     
     data = pandas.concat(dd[0])
     
-    if savefile is None:
+    if savefile is not None:
         extension = savefile.split(".")
         if extension == "parquet":
             data.to_parquet(savefile)
