@@ -163,9 +163,9 @@ def get_sigma_data(files, bins_u, bins_v,
     
     norm = df.groupby(["obsjd"])[f"{quantity}_{normref}"].transform("median")
     
-    df["{quantity}_data_n"] = df["{quantity}_data"]/norm
-    df["{quantity}_model_n"] = df["{quantity}_model"]/norm
-    df["{quantity}_residual"] = (df["{quantity}_data"]-df["{quantity}_model"])/df["{quantity}_model"]
+    df[f"{quantity}_data_n"] = df[f"{quantity}_data"]/norm
+    df[f"{quantity}_model_n"] = df[f"{quantity}_model"]/norm
+    df[f"{quantity}_residual"] = (df[f"{quantity}_data"]-df[f"{quantity}_model"])/df[f"{quantity}_model"]
     df["u_digit"] = np.digitize(df["u"],bins_u)
     df["v_digit"] = np.digitize(df["v"],bins_v)    
     return df.reset_index()
