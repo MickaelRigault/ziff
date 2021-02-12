@@ -84,6 +84,7 @@ def build_digitalized_shape(filenames, urange, vrange, chunks=50, nbins=200,
     """ """
     filedf = get_filedataframe(filenames)
     grouped = filedf.groupby("filefracday")
+    groupkeys = list( grouped.groups.keys() )
     
     bins_u = np.linspace(*urange, nbins)
     bins_v = np.linspace(*vrange, nbins)
