@@ -3,6 +3,7 @@
 import os
 import warnings
 import time
+import pandas
 import numpy as np
 
 from ztfquery import io
@@ -12,52 +13,6 @@ import dask
 #from .. import __version__
 
 
-def limit_numpy(nthreads=4):
-    """ """
-    threads = str(nthreads)
-    os.environ["NUMEXPR_NUM_THREADS"] = threads
-    os.environ["OMP_NUM_THREADS"] = threads
-    os.environ["OPENBLAS_NUM_THREADS"] = threads
-    os.environ["MKL_NUM_THREADS"] = threads
-    os.environ["VECLIB_MAXIMUM_THREADS"] = threads
-
-def _not_delayed_(func):
-    return func
-
-
-def get_ziffit_gaia_catalog(ziff, isolationlimit=10,
-                                fit_gmag=[15, 16], shape_gmag=[15,18],
-                                shuffled=True, verbose=True):
-    """ """
-    if "gaia" not in ziff.catalog:
-        if verbose:
-            print("loading gaia")
-        ziff.fetch_gaia_catalog(isolationlimit=isolationlimit)
-        
-    cat_to_fit   = ziff.get_catalog("gaia", filtered=True, shuffled=shuffled, 
-                              writeto="default",
-                              add_filter={'gmag_outrange':['gmag', fit_gmag]},
-                              xyformat="fortran")
-    
-    cat_to_shape = ziff.get_catalog("gaia", filtered=True, shuffled=shuffled, 
-                              writeto="shape",
-                              add_filter={'gmag_outrange':['gmag', shape_gmag]},
-                              xyformat="fortran")
-    
-    return cat_to_fit,cat_to_shape
-
-
-def get_file_delayed(file_, waittime=None,
-                         suffix=["sciimg.fits","mskimg.fits"], overwrite=False, 
-                         show_progress=True, maxnprocess=1, **kwargs):
-    """ """
-    if waittime is not None:
-        time.sleep(waittime)
-        
-    return io.get_file(file_, waittime=waittime,
-                        suffix=suffix, overwrite=overwrite, 
-                        show_progress=show_progress, maxnprocess=maxnprocess)
-    
 
 def ziffit_single(file_, use_dask=False, overwrite=False,
                       isolationlimit=10, waittime=None,
@@ -100,8 +55,6 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     shapes  = delayed(base.get_shapes)(ziff, psf, cat_tofit, store=True)
     
     return shapes[["sigma_model","sigma_data"]].median(axis=0).values
-    
-
 
 def compute_shapes(file_, use_dask=False, numpy_threads=None):
     """ """
@@ -126,3 +79,131 @@ def compute_shapes(file_, use_dask=False, numpy_threads=None):
     return shapes[["sigma_model","sigma_data"]].median(axis=0).values
 
     
+def build_digitalized_shape(filenames, urange, vrange, chunks=50, nbins=200,
+                            savefile=None):
+    """ """
+    filedf = get_filedataframe(filenames)
+    grouped = filedf.groupby("filefracday")
+    
+    bins_u = np.linspace(*urange, nbins)
+    bins_v = np.linspace(*vrange, nbins)
+
+    chunck_filenames = [np.concatenate([grouped["filename"].get_group(g_).values for g_ in chunk])
+                            for chunk in np.array_split(groupkeys, chunks)]
+
+
+    dfs = []
+    for cfile in chunck_filenames:
+        dfs.append(dask.delayed(get_sigma_data)(cfile, bins_u, bins_v))
+    
+    dd = dask.compute(dfs)
+    
+    data = pandas.concat(dd[0])
+    
+    if savefile is None:
+        extension = savefile.split(".")
+        if extension == "parquet":
+            data.to_parquet(savefile)
+        elif extension == "csv":
+            data.to_csv(savefile)
+        elif extension in ["hdf5", "hdf","h5"]:
+            data.to_hdf(savefile)
+        else:
+            warnings.warn(f"Cannot store the file, unrecongized extension {extension}")
+            
+    return data
+
+
+# ================ #
+#    INTERNAL      #
+# ================ #
+
+def limit_numpy(nthreads=4):
+    """ """
+    threads = str(nthreads)
+    os.environ["NUMEXPR_NUM_THREADS"] = threads
+    os.environ["OMP_NUM_THREADS"] = threads
+    os.environ["OPENBLAS_NUM_THREADS"] = threads
+    os.environ["MKL_NUM_THREADS"] = threads
+    os.environ["VECLIB_MAXIMUM_THREADS"] = threads
+
+def _not_delayed_(func):
+    return func
+
+
+def get_ziffit_gaia_catalog(ziff, isolationlimit=10,
+                                fit_gmag=[15, 16], shape_gmag=[15,18],
+                                shuffled=True, verbose=True):
+    """ """
+    if "gaia" not in ziff.catalog:
+        if verbose:
+            print("loading gaia")
+        ziff.fetch_gaia_catalog(isolationlimit=isolationlimit)
+        
+    cat_to_fit   = ziff.get_catalog("gaia", filtered=True, shuffled=shuffled, 
+                              writeto="default",
+                              add_filter={'gmag_outrange':['gmag', fit_gmag]},
+                              xyformat="fortran")
+    
+    cat_to_shape = ziff.get_catalog("gaia", filtered=True, shuffled=shuffled, 
+                              writeto="shape",
+                              add_filter={'gmag_outrange':['gmag', shape_gmag]},
+                              xyformat="fortran")
+    
+    return cat_to_fit,cat_to_shape
+
+
+def get_sigma_data(files, bins_u, bins_v, 
+                   quantity='sigma', normref="model", 
+                   basecolumns=['u', 'v', 'ccdid', 'qid', 'rcid', 'obsjd', 'fieldid','filterid', 'maglim'],
+                  ):
+    columns = basecolumns + [f"{quantity}_data",f"{quantity}_model"]
+    df = pandas.concat([pandas.read_parquet(f, columns=columns) for f in files])
+    
+    norm = df.groupby(["obsjd"])[f"{quantity}_{normref}"].transform("median")
+    
+    df["{quantity}_data_n"] = df["{quantity}_data"]/norm
+    df["{quantity}_model_n"] = df["{quantity}_model"]/norm
+    df["{quantity}_residual"] = (df["{quantity}_data"]-df["{quantity}_model"])/df["{quantity}_model"]
+    df["u_digit"] = np.digitize(df["u"],bins_u)
+    df["v_digit"] = np.digitize(df["v"],bins_v)    
+    return df.reset_index()
+
+
+def get_filedataframe(files):
+    from ztfquery import buildurl, fields
+    
+    def read_filename(file):
+        _, filefracday,paddedfield, filtercode, ccdid_, _, qid_, suffix =  file.split("/")[-1].split("_")
+        year,month, day, fracday = buildurl.filefrac_to_year_monthday_fracday(filefracday)
+        ccdid = int(ccdid_[1:])
+        qid = int(qid_[1:])        
+        return {"obsdate": f"{year}-{month}-{day}",
+                "fracday":fracday,
+                "filefracday":filefracday,
+                "fieldid":int(paddedfield),
+                "filtername":filtercode,
+                "ccdid":ccdid,
+                "qid":qid,
+                "rcid":fields.ccdid_qid_to_rcid(ccdid,qid),
+                "suffix":suffix,
+                "filename":file
+               }
+
+    return pandas.DataFrame([read_filename(f) for f in files])
+
+
+def get_file_delayed(file_, waittime=None,
+                         suffix=["sciimg.fits","mskimg.fits"], overwrite=False, 
+                         show_progress=True, maxnprocess=1, **kwargs):
+    """ """
+    if waittime is not None:
+        time.sleep(waittime)
+        
+    return io.get_file(file_, waittime=waittime,
+                        suffix=suffix, overwrite=overwrite, 
+                        show_progress=show_progress, maxnprocess=maxnprocess)
+    
+# ================ #
+#    INTERNAL      #
+# ================ #
