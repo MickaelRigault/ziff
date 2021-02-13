@@ -22,7 +22,7 @@
             "scale" : 1.012,
             "size" : 15,
             "start_sigma": 2.0,
-            "centered": 0
+            "centered": False
         },
         "interp":{
             "type" :  "BasisPolynomial",
