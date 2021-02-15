@@ -19,7 +19,15 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
                       nstars=300, interporder=3, maxoutliers=None, 
                       fit_gmag=[15,16], shape_gmag=[15,19],
                       numpy_threads=None):
-    """ """
+    """ high level script function of ziff to 
+    - find the isolated star from gaia 
+    - fit the PSF using piff
+    - compute and store the stars and psf-model shape parameters
+
+    = Dask oriented =
+
+
+    """
     if numpy_threads is not None:
         limit_numpy(nthreads=numpy_threads)
 
@@ -56,8 +64,15 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     
     return delayed(_get_ziffit_output_)(shapes)
 
-def compute_shapes(file_, use_dask=False, numpy_threads=None):
-    """ """
+def compute_shapes(file_, use_dask=False, numpy_threads=None, incl_residual=False):
+    """ high level script function of ziff to 
+    - compute and store the stars and psf-model shape parameters
+
+    This re-perform the last steps of ziffit_single.
+
+    = Dask oriented =
+
+    """
     if numpy_threads is not None:
         limit_numpy(nthreads=numpy_threads)
 
@@ -74,14 +89,19 @@ def compute_shapes(file_, use_dask=False, numpy_threads=None):
     cat_toshape  = delayed(base.catlib.Catalog.load)(catfile, wcs=ziff.wcs)
     psf          = delayed(base.piff.PSF.read)(file_name=psffile, logger=None)
 
-    shapes       = delayed(base.get_shapes)(ziff, psf, cat_toshape, store=True)
+    shapes       = delayed(base.get_shapes)(ziff, psf, cat_toshape, incl_residual=incl_residual, store=True)
     
     return shapes[["sigma_model","sigma_data"]].median(axis=0).values
 
     
 def build_digitalized_shape(filenames, urange, vrange, chunks=50, nbins=200,
                             savefile=None):
-    """ """
+    """ high level script function of ziff to 
+    - read the computed shape parameters
+
+    = Dask oriented =
+
+    """
     filedf = get_filedataframe(filenames)
     grouped = filedf.groupby("filefracday")
     groupkeys = list( grouped.groups.keys() )
@@ -114,11 +134,10 @@ def build_digitalized_shape(filenames, urange, vrange, chunks=50, nbins=200,
             
     return data
 
-
+    
 # ================ #
 #    INTERNAL      #
 # ================ #
-
 def limit_numpy(nthreads=4):
     """ """
     threads = str(nthreads)

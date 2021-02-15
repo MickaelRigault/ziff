@@ -79,7 +79,7 @@ def get_psf_suffix(config, baseline="psf", extension=".piff"):
     return f'{baseline}_{config["psf"]["model"]["type"]}_{config["psf"]["interp"]["type"]}{config["psf"]["interp"]["order"]}{extension}'
 
 
-def get_shapes(ziff, psf, cat, store=True):
+def get_shapes(ziff, psf, cat, incl_residual=False, store=True, **kwargs):
     """ """
     if not ziff.has_images():
         warnings.warn("No image in the given ziff")
@@ -111,6 +111,7 @@ def get_shapes(ziff, psf, cat, store=True):
         warnings.warn(f"{npoints_star-cat.npoints}/{npoints_star} have been drop from the cat when loading stars.")
         
     starmodel = ziff.get_stars_psfmodel(stars)
+        
     #
     # - Information
     columns   = "flux", "centeru", "centerv", "sigma", "shapeg1", "shapeg2", "flag"
@@ -135,9 +136,14 @@ def get_shapes(ziff, psf, cat, store=True):
     # Add image information
     keys = ["ccdid","qid","rcid","obsjd","fieldid","filterid","maglim"]
     shapes[keys] = [getattr(ziff,k_) for k_ in keys]
+
+    if incl_residual:
+        residual = [np.ravel(s_.image.array - m_.image.array) for s_,m_ in zip(stars, starmodel)]
+        shapes["residual"] = residual
+        kwargs["engine"]="pyarrow"
     
     if store:
-        shapes.to_parquet(ziff.build_filename("psfshape",".parquet")[0])
+        shapes.to_parquet(ziff.build_filename("psfshape",".parquet")[0], **kwargs)
         
     return shapes
         
