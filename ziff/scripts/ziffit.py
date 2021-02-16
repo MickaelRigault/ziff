@@ -188,9 +188,13 @@ def get_ziffit_gaia_catalog(ziff, isolationlimit=10,
 
 def get_sigma_data(files, bins_u, bins_v, 
                    quantity='sigma', normref="model", 
-                   basecolumns=['u', 'v', 'ccdid', 'qid', 'rcid', 'obsjd', 'fieldid','filterid', 'maglim'],
+                   basecolumns=['u', 'v', 'ccdid', 'qid', 'rcid', 'obsjd', 'fieldid','filterid', 'maglim', "residual"],
                   ):
-    columns = basecolumns + [f"{quantity}_data",f"{quantity}_model"]
+    columns = basecolumns + [f"sigma_data",  f"sigma_model"] + \
+                            [f"shapeg2_data",f"shapeg2_model"] + \
+                            [f"shapeg1_data",f"shapeg1_model"] + \
+                            [f"centerv_data",f"centerv_model"] + \
+                            [f"centeru_data",f"centeru_model"]
     df = pandas.concat([pandas.read_parquet(f, columns=columns) for f in files])
     
     norm = df.groupby(["obsjd"])[f"{quantity}_{normref}"].transform("median")
