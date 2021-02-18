@@ -195,7 +195,7 @@ def get_sigma_data(files, bins_u, bins_v,
         shape_columns = [f"{quantity}_data",  f"{quantity}_model"]
         incl_residual = False
     else:
-        shape_columns = [f"sigma_data",f"sigma_model"] +
+        shape_columns = [f"sigma_data",f"sigma_model"] + \
                         [f"shapeg2_data",f"shapeg2_model"] + \
                         [f"shapeg1_data",f"shapeg1_model"] + \
                         [f"centerv_data",f"centerv_model"] + \
