@@ -95,7 +95,7 @@ def compute_shapes(file_, use_dask=False, numpy_threads=None, incl_residual=Fals
 
     
 def build_digitalized_shape(filenames, urange, vrange, chunks=50, nbins=200,
-                            savefile=None):
+                            savefile=None, minimal=True):
     """ high level script function of ziff to 
     - read the computed shape parameters
 
@@ -115,7 +115,7 @@ def build_digitalized_shape(filenames, urange, vrange, chunks=50, nbins=200,
 
     dfs = []
     for cfile in chunck_filenames:
-        dfs.append(dask.delayed(get_sigma_data)(cfile, bins_u, bins_v))
+        dfs.append(dask.delayed(get_sigma_data)(cfile, bins_u, bins_v, minimal=minimal))
     
     dd = dask.compute(dfs)
     
@@ -186,16 +186,26 @@ def get_ziffit_gaia_catalog(ziff, isolationlimit=10,
         return None,None
 
 
-def get_sigma_data(files, bins_u, bins_v, 
-                   quantity='sigma', normref="model", 
-                   basecolumns=['u', 'v', 'ccdid', 'qid', 'rcid', 'obsjd', 'fieldid','filterid', 'maglim', "residual"],
+def get_sigma_data(files, bins_u, bins_v,
+                    minimal=False,
+                   quantity='sigma', normref="model", incl_residual=True,
+                   basecolumns=['u', 'v', 'ccdid', 'qid', 'rcid', 'obsjd', 'fieldid','filterid', 'maglim'],
                   ):
-    columns = basecolumns + [f"sigma_data",  f"sigma_model"] + \
-                            [f"shapeg2_data",f"shapeg2_model"] + \
-                            [f"shapeg1_data",f"shapeg1_model"] + \
-                            [f"centerv_data",f"centerv_model"] + \
-                            [f"centeru_data",f"centeru_model"]
-    df = pandas.concat([pandas.read_parquet(f, columns=columns) for f in files])
+    if minimal:
+        shape_columns = [f"{quantity}_data",  f"{quantity}_model"]
+        incl_residual = False
+    else:
+        shape_columns = [f"sigma_data",f"sigma_model"] +
+                        [f"shapeg2_data",f"shapeg2_model"] + \
+                        [f"shapeg1_data",f"shapeg1_model"] + \
+                        [f"centerv_data",f"centerv_model"] + \
+                        [f"centeru_data",f"centeru_model"]
+    columns = basecolumns + shape_columns
+    if incl_residual: 
+           columns += ["residual"]
+
+           
+    df = pandas.concat([pandas.read_parquet(f, columns=columns) for f in files], keys=[f.split("/")[-1] for f in files]).reset_index()
     
     norm = df.groupby(["obsjd"])[f"{quantity}_{normref}"].transform("median")
     
