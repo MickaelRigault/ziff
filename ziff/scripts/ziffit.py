@@ -204,8 +204,9 @@ def get_sigma_data(files, bins_u, bins_v,
     if incl_residual: 
            columns += ["residual"]
 
-           
-    df = pandas.concat([pandas.read_parquet(f, columns=columns) for f in files], keys=[f.split("/")[-1] for f in files]).reset_index()
+    filefracday = [f.split("/")[-1].split("_")[1] for f in files]
+    df = pandas.concat([pandas.read_parquet(f, columns=columns) for f in files], keys=filefracday
+                           ).reset_index().rename({"level_0":"filefracday"}, axis=1)
     
     norm = df.groupby(["obsjd"])[f"{quantity}_{normref}"].transform("median")
     
@@ -214,7 +215,7 @@ def get_sigma_data(files, bins_u, bins_v,
     df[f"{quantity}_residual"] = (df[f"{quantity}_data"]-df[f"{quantity}_model"])/df[f"{quantity}_model"]
     df["u_digit"] = np.digitize(df["u"],bins_u)
     df["v_digit"] = np.digitize(df["v"],bins_v)    
-    return df.reset_index()
+    return df
 
 
 def get_filedataframe(files):
