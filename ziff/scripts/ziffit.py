@@ -64,7 +64,7 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     
     return delayed(_get_ziffit_output_)(shapes)
 
-def compute_shapes(file_, use_dask=False, numpy_threads=None, incl_residual=False):
+def compute_shapes(file_, use_dask=False, numpy_threads=None, incl_residual=False, incl_stars=False):
     """ high level script function of ziff to 
     - compute and store the stars and psf-model shape parameters
 
@@ -89,7 +89,8 @@ def compute_shapes(file_, use_dask=False, numpy_threads=None, incl_residual=Fals
     cat_toshape  = delayed(base.catlib.Catalog.load)(catfile, wcs=ziff.wcs)
     psf          = delayed(base.piff.PSF.read)(file_name=psffile, logger=None)
 
-    shapes       = delayed(base.get_shapes)(ziff, psf, cat_toshape, incl_residual=incl_residual, store=True)
+    shapes       = delayed(base.get_shapes)(ziff, psf, cat_toshape, store=True,
+                                                incl_residual=incl_residual, incl_stars=incl_stars)
     
     return shapes[["sigma_model","sigma_data"]].median(axis=0).values
 
