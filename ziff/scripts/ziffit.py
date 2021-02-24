@@ -96,7 +96,7 @@ def compute_shapes(file_, use_dask=False, numpy_threads=None, incl_residual=Fals
 
     
 def build_digitalized_shape(filenames, urange, vrange, chunks=50, nbins=200,
-                            savefile=None, minimal=True):
+                            savefile=None, minimal=True, return_delayed=False):
     """ high level script function of ziff to 
     - read the computed shape parameters
 
@@ -117,6 +117,9 @@ def build_digitalized_shape(filenames, urange, vrange, chunks=50, nbins=200,
     dfs = []
     for cfile in chunck_filenames:
         dfs.append(dask.delayed(get_sigma_data)(cfile, bins_u, bins_v, minimal=minimal))
+
+    if return_delayed:
+        return dfs
     
     dd = dask.compute(dfs)
     
