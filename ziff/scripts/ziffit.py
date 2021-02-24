@@ -113,10 +113,12 @@ def build_digitalized_shape(filenames, urange, vrange, chunks=50, nbins=200,
     chunck_filenames = [np.concatenate([grouped["filename"].get_group(g_).values for g_ in chunk])
                             for chunk in np.array_split(groupkeys, chunks)]
 
-
+    
     dfs = []
-    for cfile in chunck_filenames:
-        dfs.append(dask.delayed(get_sigma_data)(cfile, bins_u, bins_v, minimal=minimal))
+    for i, cfile in enumerate(chunck_filenames):
+        dfs.append(dask.delayed(get_sigma_data)(cfile, bins_u, bins_v, minimal=minimal,
+                                                savefile=None if savefile is None else savefile.replace(".parquet","chunk{i}.parquet")
+                                               )
 
     if return_delayed:
         return dfs
@@ -194,6 +196,7 @@ def get_sigma_data(files, bins_u, bins_v,
                     minimal=False,
                    quantity='sigma', normref="model", incl_residual=True,
                    basecolumns=['u', 'v', 'ccdid', 'qid', 'rcid', 'obsjd', 'fieldid','filterid', 'maglim'],
+                   savefile=None,
                   ):
     if minimal:
         shape_columns = [f"{quantity}_data",  f"{quantity}_model"]
@@ -218,7 +221,9 @@ def get_sigma_data(files, bins_u, bins_v,
     df[f"{quantity}_model_n"] = df[f"{quantity}_model"]/norm
     df[f"{quantity}_residual"] = (df[f"{quantity}_data"]-df[f"{quantity}_model"])/df[f"{quantity}_model"]
     df["u_digit"] = np.digitize(df["u"],bins_u)
-    df["v_digit"] = np.digitize(df["v"],bins_v)    
+    df["v_digit"] = np.digitize(df["v"],bins_v)
+    if savefile:
+        df.to_parquet(savefile)
     return df
 
 
