@@ -82,6 +82,25 @@ def get_threeplot_axes(fig=None, scalex=1, scaley=1, globalbottom=0, globalleft=
     return fig, axes, caxes
 
 
+def display_binned2d(ax, binneddata, xbins=None, ybins=None, vmin="5", vmax="95", cax=None,
+                         transpose=False, cmap=None, **kwargs):
+    """ """
+    from ziff.plots import vminvmax_parser
+    vmin_, vmax_ = vminvmax_parser(binneddata, vmin, vmax)
+    if xbins is not None and ybins is not None:
+        extent = (xbins[0],xbins[-1],ybins[0],ybins[-1])
+    else:
+        extent = None
+        
+    prop = dict(origin="lower", extent=extent)
+    im = ax.imshow(binneddata.T if transpose else binneddata, cmap=cmap,
+                    vmin=vmin_, vmax=vmax_, **{**prop,**kwargs})
+    
+    if cax is not None:
+        ax.figure.colorbar(im, cax=cax)
+        
+    return im
+
 def show_shapebinned(dataframe, nbins=50, 
                      which="sigma", vmin="2", vmax="98", cmap='RdBu_r', normres=True,
                      tight_layout=True, rmflagout=True, cvmin=None, cvmax=None, suffix=["_stars","_model"],
