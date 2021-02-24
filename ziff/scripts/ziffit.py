@@ -119,6 +119,7 @@ def build_digitalized_shape(filenames, urange, vrange, chunks=50, nbins=200,
         dfs.append(dask.delayed(get_sigma_data)(cfile, bins_u, bins_v, minimal=minimal,
                                                 savefile=None if savefile is None else savefile.replace(".parquet","chunk{i}.parquet")
                                                )
+                  )
 
     if return_delayed:
         return dfs
