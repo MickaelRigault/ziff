@@ -8,7 +8,7 @@ from ztfquery import buildurl
 def _get_metapixeldata_(grouped_digit, metapixel):
     """ """
     metapixeldata = grouped_digit.get_group(tuple(metapixel))
-    metapixeldata["filename"] = buildurl.build_filename_from_dataframe(metapixeldata))
+    metapixeldata["filename"] = buildurl.build_filename_from_dataframe(metapixeldata)
     return metapixeldata
 
 def _fetch_residuals_(fgroups, datakey):
