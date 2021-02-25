@@ -173,9 +173,9 @@ class PSFShapeAnalysis( object ):
         f_skies = client.map(_residual_to_skydata_, f_stamps, buffer=buffer)
 
         if gather:
-            return client.gather(fskies)
+            return client.gather(f_skies)
         
-        return fskies
+        return f_skies
     # --------- #
     #  PLOTTER  #
     # --------- #
