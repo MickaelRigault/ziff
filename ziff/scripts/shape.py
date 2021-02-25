@@ -4,32 +4,9 @@ import pandas
 import dask.dataframe as dd
 
 from . import ziffit
-from ztfquery import buildurl
+from ztfquery import buildurl,io
 
 
-def _get_metapixeldata_(grouped_digit, metapixel):
-    """ """
-    metapixeldata = grouped_digit.get_group(tuple(metapixel))
-    metapixeldata["filename"] = buildurl.build_filename_from_dataframe(metapixeldata)
-    return metapixeldata
-
-def _fetch_residuals_(fgroups, datakey):
-    datas = []
-    for filename in list(fgroups.groups.keys())[:100]:
-        source = fgroups.get_group(filename)["Source"].values
-        fdata  = pandas.read_parquet(io.get_file(filename, suffix="psfshape.parquet", check_suffix=False),
-                   columns=[datakey]).loc[source].values.tolist()
-
-        datas.append(fdata)
-    return np.squeeze(np.concatenate(datas))
-
-def fetch_metapixel_psfshape_data(grouped_digit, metapixel, datakey, use_dask=False):
-    delayed = ziffit._not_delayed_ if not use_dask else dask.delayed
-    
-    mdata   = delayed(_get_metapixeldata_)(grouped_digit, metapixel)
-    fgroups = mdata.groupby("filename")
-    datas = delayed(_fetch_residuals_)(fgroups, datakey)
-    return datas
 
 def _residual_to_skydata_(residuals, buffer=2):
     """ """
@@ -41,12 +18,17 @@ def _residual_to_skydata_(residuals, buffer=2):
     npoints    =  np.sum(~np.isnan(residuals), axis=(1,2))
     return median_sky,[means, stds, npoints]
 
-def fetch_metapixel_sky(grouped_digit, metapixel, use_dask=False, buffer=2):
-    delayed   = ziffit._not_delayed_ if not use_dask else dask.delayed
-    residuals = fetch_metapixel_psfshape_data(grouped_digit, metapixel, datakey="residual", use_dask=False)
-    dataout   = delayed(_residual_to_skydata_)(residuals, buffer=buffer)
-    return dataout
-
+def _fetch_residuals_(metadataframe, datakey='stars'):
+     from ztfquery import io
+     fgroups = metadataframe.groupby("filename")
+     datas = []
+     for filename in list(fgroups.groups.keys()):
+         source = fgroups.get_group(filename)["Source"].values
+         fdata  = pandas.read_parquet(io.get_file(filename, suffix="psfshape.parquet", check_suffix=False),
+                    columns=[datakey]).loc[source].values.tolist()
+         datas.append(fdata)
+     return np.squeeze(np.concatenate(datas))
+     
 
 
 
@@ -54,7 +36,7 @@ class PSFShapeAnalysis( object ):
     """ """
     def __init__(self):
         """ """
-
+        
     @classmethod
     def from_directory(cls, directory, patern="*.parquet", urange=None, vrange=None, bins=None):
         """ """
@@ -162,6 +144,37 @@ class PSFShapeAnalysis( object ):
         
         return metapixeldata
 
+    # ------------- #
+    # Client GETTER #
+    # ------------- #
+    def cget_median_stampsky(self, metapixels, client, on="stars", buffer=2, gather=True):
+        """ 
+        Parameters
+        ----------
+        on: [string] -optional-
+            on could be stars or residual
+           
+        """
+        # dmetapixeldata is lazy
+        dmetapixeldata = [self.get_metapixel_sources(l_, compute=False)
+                              for l_ in metapixels]
+        # all metapixeldata are computed but still distribution inside the cluster
+        # they are 'futures'
+        #  They are computed together for the share the same data files
+        f_metapixeldata  = client.compute(dmetapixeldata)
+        
+        # Logic. Then work on the distributed data
+        
+        # Grab all the stars for each of them. Computation made on the respective cluster's computer
+        f_stamps = client.map(_fetch_residuals_, f_metapixeldata, datakey=on)
+        
+        # Compute the sky study on them
+        f_skies = client.map(_residual_to_skydata_, f_stamps, buffer=buffer)
+
+        if gather:
+            return client.gather(fskies)
+        
+        return fskies
     # --------- #
     #  PLOTTER  #
     # --------- #
