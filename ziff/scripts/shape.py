@@ -1,6 +1,8 @@
 
 import numpy as np
 import pandas
+import dask.dataframe as dd
+
 from . import ziffit
 from ztfquery import buildurl
 
