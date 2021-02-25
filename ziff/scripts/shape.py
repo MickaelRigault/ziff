@@ -8,7 +8,7 @@ from ztfquery import buildurl
 def _get_metapixeldata_(grouped_digit, metapixel):
     """ """
     metapixeldata = grouped_digit.get_group(tuple(metapixel))
-    metapixeldata.insert(0,"filename", buildurl.build_filename_from_dataframe(metapixeldata))
+    metapixeldata["filename"] = buildurl.build_filename_from_dataframe(metapixeldata))
     return metapixeldata
 
 def _fetch_residuals_(fgroups, datakey):
@@ -46,21 +46,22 @@ def fetch_metapixel_sky(grouped_digit, metapixel, use_dask=False, buffer=2):
     return dataout
 
 
+
+
 class PSFShapeAnalysis( object ):
+    """ """
     def __init__(self):
         """ """
 
     @classmethod
-    def read_parquet(cls, filename, urange=None, vrange=None, bins=None, engine="pyarrow", **kwargs):
+    def from_directory(cls, directory, patern="*.parquet", urange=None, vrange=None, bins=None):
         """ """
+        import os
         this = cls()
-        data = pandas.read_parquet(filename, engine="pyarrow")
+        data = dd.read_parquet(os.path.join(directory,patern))
         this.set_data(data, urange=urange, vrange=vrange, bins=bins)
         return this
         
-    # =================== #
-    #   Method            #
-    # =================== #
     # --------- #
     #  SETTER   #
     # --------- #
@@ -73,25 +74,30 @@ class PSFShapeAnalysis( object ):
         """ """
         self._binning = {"urange":urange, "vrange":vrange, "bins":bins}
 
+    # --------- #
+    #  LOADER   #
+    # --------- #
+    def load_medianserie(self):
+        """ """
+        self._seriemedian = self.grouped_digit[["sigma_model_n","sigma_data_n","sigma_residual"]
+                                              ].apply(pandas.Series.median).compute()
+
     def load_shapemaps(self):
         """ """
         hist2d = np.ones((4, self.binning["bins"],self.binning["bins"]))*np.NaN
         
-        for k,v in self.grouped_digit.median().iterrows():
+        for k,v in self.seriemedian.iterrows():
             hist2d[0, k[1], k[0]] = v["sigma_data_n"]
             hist2d[1, k[1], k[0]] = v["sigma_model_n"]
             hist2d[2, k[1], k[0]] = v["sigma_residual"]
 
-        for k,v in self.grouped_digit.size().iteritems():
+        for k,v in self.grouped_digit.size().compute().iteritems():
             hist2d[3, k[1], k[0]] = v
 
-        self._shapemaps = {"data":hist2d[0],
-                           "model":hist2d[1],
-                           "residual":hist2d[2],
-                           "density":hist2d[3]
-                          }
-        del hist2d
-
+        self._shapemaps = {"data": hist2d[0],
+                           "model": hist2d[1],
+                           "residual": hist2d[2],
+                           "density": hist2d[3]}
     # --------- #
     #  GETTER   #
     # --------- #
@@ -143,26 +149,23 @@ class PSFShapeAnalysis( object ):
                 mpxl_args = mpxl_args[np.sqrt(ub**2+ vb**2)<dist_]
 
         return mpxl_args
-        """
 
-        brightest_dust = np.asarray([b for i,b in enumerate(brightest) if 
-                        np.sqrt(udust[i]**2+ vdust[i]**2)<500
-                         ])
-        if within is not None:
-            
-            ub = self.bins_u-ucentroid
-            vb = self.bins_v-vcentroid
-            flag.append(np.argwhere(np.sqrt(ub**2+ vb**2)<dist_))
-        """
-        return flag
-            
+
+    def get_metapixel_sources(self, metapixel, columns=["filename", "Source"], compute=True):
+        """ """
+        metapixeldata = self.grouped_digit.get_group(tuple(metapixel))
+        metapixeldata["filename"] = buildurl.build_filename_from_dataframe(metapixeldata)
+        if columns is not None and compute
+            return metapixeldata[columns].compute()
         
+        return metapixeldata
+
     # --------- #
     #  PLOTTER  #
     # --------- #
     def show_psfshape_maps(self, savefile=None, vmin="3", vmax="97"):
         """ """
-        from ..plots import get_threeplot_axes, vminvmax_parser, display_binned2d
+        from ziff.plots import get_threeplot_axes, vminvmax_parser, display_binned2d
 
         fig, [axd, axm, axr], [cax, caxr] = get_threeplot_axes(fig=None, bottom=0.1, hxspan=0.09)
 
@@ -194,7 +197,6 @@ class PSFShapeAnalysis( object ):
             
         return fig
 
-    
     # ================= #
     #    Properties     #
     # ================= #
@@ -210,6 +212,22 @@ class PSFShapeAnalysis( object ):
             self._grouped_digit = self.data.groupby(["u_digit","v_digit"])
             
         return self._grouped_digit
+
+    @property
+    def seriemedian(self):
+        """ """
+        if not hasattr(self,"_seriemedian") or self._seriemedian is None:
+            self.load_medianserie()
+            
+        return self._seriemedian
+    
+    @property
+    def shapemaps(self):
+        """ """
+        if not hasattr(self,"_shapemaps") or self._shapemaps is None:
+            self.load_shapemaps()
+            
+        return self._shapemaps
     
     @property
     def binning(self):
@@ -225,8 +243,3 @@ class PSFShapeAnalysis( object ):
     def bins_v(self):
         """ """
         return np.linspace(*self.binning["vrange"], self.binning["bins"])
-
-    @property
-    def shapemaps(self):
-        """ """
-        return self._shapemaps
