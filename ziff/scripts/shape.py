@@ -7,7 +7,6 @@ from . import ziffit
 from ztfquery import buildurl,io
 
 
-
 def _residual_to_skydata_(residuals, buffer=2):
     """ """
     residuals  = residuals.reshape(len(residuals), 15, 15)
@@ -19,15 +18,17 @@ def _residual_to_skydata_(residuals, buffer=2):
     return median_sky,[means, stds, npoints]
 
 def _fetch_residuals_(metadataframe, datakey='stars'):
-     from ztfquery import io
-     fgroups = metadataframe.groupby("filename")
-     datas = []
-     for filename in list(fgroups.groups.keys()):
-         source = fgroups.get_group(filename)["Source"].values
-         fdata  = pandas.read_parquet(io.get_file(filename, suffix="psfshape.parquet", check_suffix=False),
-                    columns=[datakey]).loc[source].values.tolist()
-         datas.append(fdata)
-     return np.squeeze(np.concatenate(datas))
+    """ """
+    # Slowest function
+    fgroups = metadataframe.groupby("filename")
+    datas = []
+    for filename in list(fgroups.groups.keys()):
+        source = fgroups.get_group(filename)["Source"].values
+        fdata  = pandas.read_parquet(io.get_file(filename, suffix="psfshape.parquet", check_suffix=False),
+                        columns=[datakey]).loc[source].values.tolist()
+        datas.append(fdata)
+        
+    return np.squeeze(np.concatenate(datas))
      
 
 
