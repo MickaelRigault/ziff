@@ -155,7 +155,7 @@ class PSFShapeAnalysis( object ):
         """ """
         metapixeldata = self.grouped_digit.get_group(tuple(metapixel))
         metapixeldata["filename"] = buildurl.build_filename_from_dataframe(metapixeldata)
-        if columns is not None and compute
+        if columns is not None and compute:
             return metapixeldata[columns].compute()
         
         return metapixeldata
