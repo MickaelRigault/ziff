@@ -77,7 +77,7 @@ class PSFShapeAnalysis( object ):
         self._data = data
         self.set_binning(urange=urange, vrange=vrange, bins=bins)
         if "u_digit,v_digit" not in self.data.columns:
-            self.data["u_digit,v_digit"] = self.data["u_digit"].astype("str")+","+sa.data["v_digit"].astype("str")
+            self.data["u_digit,v_digit"] = self.data["u_digit"].astype("str")+","+ self.data["v_digit"].astype("str")
 
         if persist and self.has_client():
             self._data = client.persist(self.data)
