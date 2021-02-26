@@ -29,7 +29,25 @@ def _fetch_residuals_(metadataframe, datakey='stars'):
         datas.append(fdata)
         
     return np.squeeze(np.concatenate(datas))
-     
+
+def _fetch_filesource_data_(filename, datakey, sources=None):
+    """ """
+    data    = pandas.read_parquet(io.get_file(filename, suffix="psfshape.parquet", check_suffix=False),
+                                    columns=[datakey])
+    if sources is not None:
+        data = data.loc[sources]
+        
+    return data.values.tolist()
+    
+
+
+def _fetch_data_of_filegroup_(dataframegroup, datakey="stars"):
+    """ """
+    filename = dataframegroup["filename"].iloc[0] # all the same
+    sources  = dataframegroup["Source"].unique() # unclear
+    fdata    = pandas.read_parquet(io.get_file(filename, suffix="psfshape.parquet", check_suffix=False),
+                                    columns=[datakey]).loc[sources].values.tolist()
+    return fdata
 
 
 
@@ -50,10 +68,19 @@ class PSFShapeAnalysis( object ):
     # --------- #
     #  SETTER   #
     # --------- #
-    def set_data(self, data, urange=None, vrange=None, bins=None):
+    def set_client(self, client):
+        """ """
+        self._client = client
+        
+    def set_data(self, data, urange=None, vrange=None, bins=None, persist=True):
         """ """
         self._data = data
         self.set_binning(urange=urange, vrange=vrange, bins=bins)
+        if "u_digit,v_digit" not in self.data.columns:
+            self.data["u_digit,v_digit"] = self.data["u_digit"].astype("str")+","+sa.data["v_digit"].astype("str")
+
+        if persist and self.has_client():
+            self._data = client.persist(self.data)
 
     def set_binning(self, urange, vrange, bins):
         """ """
@@ -93,7 +120,7 @@ class PSFShapeAnalysis( object ):
         return ucenter,vcenter
 
     def get_metapixels(self, resrange=None, modelrange=None, datarange=None, densityrange=None,
-                           within=None):
+                           within=None, as_string=False):
         """ 
         Parameters
         ----------
@@ -133,9 +160,21 @@ class PSFShapeAnalysis( object ):
                 vb = self.bins_v[mpxl_args.T[0]]-vcentroid
                 mpxl_args = mpxl_args[np.sqrt(ub**2+ vb**2)<dist_]
 
+        if as_string:
+             return np.asarray([f"{u_},{v_}" for u_,v_ in mpxl_args])
+         
         return mpxl_args
 
 
+    def get_metapixel_data(self, metapixel, columns=None):
+        """ """
+        if columns is not None:
+            self.data[columns][self.data['u_digit,v_digit'].isin(ppxlk)]
+        else:
+            self.data[self.data['u_digit,v_digit'].isin(ppxlk)]
+        return data
+
+    
     def get_metapixel_sources(self, metapixel, columns=["filename", "Source"], compute=True):
         """ """
         metapixeldata = self.grouped_digit.get_group(tuple(metapixel))
@@ -157,6 +196,12 @@ class PSFShapeAnalysis( object ):
            
         """
         # dmetapixeldata is lazy
+        all_meta = []
+        for p_ in metapixels:
+            metapixeldata = self.grouped_digit[["filefracday","fieldid","ccdid","qid","filterid","Source"]
+                                                   ].get_group(tuple(metapixel))
+            metapixeldata["filename"] = buildurl.build_filename_from_dataframe(metapixeldata)
+        
         dmetapixeldata = [self.get_metapixel_sources(l_, compute=False)
                               for l_ in metapixels]
         # all metapixeldata are computed but still distribution inside the cluster
@@ -216,6 +261,17 @@ class PSFShapeAnalysis( object ):
     # ================= #
     #    Properties     #
     # ================= #
+    @property
+    def client(self):
+        """ """
+        if not self.has_client():
+            return None
+        return self._client
+
+    def has_client(self):
+        """ """
+        return hasattr(self, "_client") and self._client is not None
+    
     @property
     def data(self):
         """ """
