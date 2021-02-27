@@ -68,9 +68,12 @@ class PSFShapeAnalysis( object ):
     # --------- #
     #  SETTER   #
     # --------- #
-    def set_client(self, client):
+    def set_client(self, client, persist=True):
         """ """
         self._client = client
+        if self.has_data() and persist:
+            self._data = self.client.persist(self.data)
+            
         
     def set_data(self, data, urange=None, vrange=None, bins=None, persist=True):
         """ """
@@ -169,11 +172,17 @@ class PSFShapeAnalysis( object ):
     def get_metapixel_data(self, metapixel, columns=None):
         """ """
         if columns is not None:
-            self.data[columns][self.data['u_digit,v_digit'].isin(ppxlk)]
+            self.data[columns][self.data['u_digit,v_digit'].isin(metapixel)]
         else:
-            self.data[self.data['u_digit,v_digit'].isin(ppxlk)]
+            self.data[self.data['u_digit,v_digit'].isin(metapixel)]
         return data
 
+    def fetch_metapixel_data(self, metapixel, datakey):
+        """ """
+        subdata = self.get_metapixel_data(metapixel, columns=["Source","filefracday","fieldid","ccdid","qid","filterid"])
+        subdata["filename"] = buildurl.build_filename_from_dataframe(subdata)
+        
+        
     
     def get_metapixel_sources(self, metapixel, columns=["filename", "Source"], compute=True):
         """ """
@@ -276,6 +285,10 @@ class PSFShapeAnalysis( object ):
     def data(self):
         """ """
         return self._data
+
+    def has_data(self):
+        """ """
+        return hasattr(self, "_data") and self._data is not None
 
     @property
     def grouped_digit(self):
