@@ -78,4 +78,58 @@ class BasisPolynomialPlusMap(BasisPolynomial):
         out[0] = value  # The constant term is always first.
         return out
 
+
+
+
+class BasisPolynomialPlusStampMap(BasisPolynomial):
+
+    _EXTRA_TERM = 1
+    
+    def __init__(self, order, interpolation_map_file, keys=('u','v'), max_order=None, use_qr=False, logger=None):
+        super(BasisPolynomialPlusMap, self).__init__(order, keys=('u','v'), max_order=None, use_qr=False, logger=None)
+        # Now build a mask that picks the desired polynomial products
+        # Start with 1d arrays giving orders in all dimensions
+        ord_ranges = [np.arange(order+self._EXTRA_TERM, dtype=int) for order in self._orders]
+        # Nifty trick to produce n-dim array holding total order
+        sumorder = np.sum(np.ix_(*ord_ranges))
+        self._mask = sumorder <= self._max_order + self._EXTRA_TERM # +1 is for the map
+        self._interpolation_map_file = interpolation_map_file
+        self.kwargs = {
+            'order' : order,
+            'use_qr' : use_qr,
+            'interpolation_map_file' : interpolation_map_file
+        }
+        self.load_map()
+         
+
+    def load_map(self):
+        with open(self.kwargs['interpolation_map_file'], 'rb') as f:
+            interp = pickle.load(f)
+        self._map = interp
+        
+    def basis(self, star):
+        """Return 1d array of polynomial basis values for this star
+
+        :param star:   A Star instance
+
+        :returns:      1d numpy array with values of u^i v^j for 0<i+j<=order
+        """
+        polynomial_basis = super().basis(star)
+        # We add one coefficient to the polynomial basis coming from the map
+        map_value = self._map(self.getProperties(star))
+        return np.hstack([polynomial_basis, map_value])
+    
+
+    def constant(self, value=1.):
+        """Return 1d array of coefficients that represent a polynomial with constant value.
+
+        :param value:  The value to use as the constant term.  [default: 1.]
+
+        :returns:      1d numpy array with values of u^i v^j for 0<i+j<=order
+        """
+        out = np.zeros( np.count_nonzero(self._mask) + 1, dtype=float)
+        out[0] = value  # The constant term is always first.
+        return out
+    
+
 # End of additional_piff_classes.py ========================================================

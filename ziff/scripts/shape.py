@@ -1,34 +1,24 @@
 
+import warnings
 import numpy as np
 import pandas
+
 import dask.dataframe as dd
+from dask import delayed
+
 
 from . import ziffit
 from ztfquery import buildurl,io
 
+import pandas
+from ztfquery import io
 
-def _residual_to_skydata_(residuals, buffer=2):
-    """ """
-    residuals  = residuals.reshape(len(residuals), 15, 15)
-    residuals[:, buffer:-buffer,buffer:-buffer] = np.NaN
-    median_sky = np.median(residuals, axis=0)
-    means      = np.nanmean(residuals, axis=(1,2))
-    stds       = np.nanstd(residuals, axis=(1,2))
-    npoints    =  np.sum(~np.isnan(residuals), axis=(1,2))
-    return median_sky,[means, stds, npoints]
 
-def _fetch_residuals_(metadataframe, datakey='stars'):
+def _fetch_filesource_sky_(filename, buffer=2, datakey="stars", sources=None,
+                               statistic="median", **kwargs):
     """ """
-    # Slowest function
-    fgroups = metadataframe.groupby("filename")
-    datas = []
-    for filename in list(fgroups.groups.keys()):
-        source = fgroups.get_group(filename)["Source"].values
-        fdata  = pandas.read_parquet(io.get_file(filename, suffix="psfshape.parquet", check_suffix=False),
-                        columns=[datakey]).loc[source].values.tolist()
-        datas.append(fdata)
-        
-    return np.squeeze(np.concatenate(datas))
+    res = _fetch_filesource_data_(filename, datakey, sources=sources)
+    return _residual_to_skydata_(np.asarray(res), buffer=buffer, statistic=statistic, **kwargs)
 
 def _fetch_filesource_data_(filename, datakey, sources=None):
     """ """
@@ -39,15 +29,32 @@ def _fetch_filesource_data_(filename, datakey, sources=None):
         
     return data.values.tolist()
     
-
-
-def _fetch_data_of_filegroup_(dataframegroup, datakey="stars"):
-    """ """
-    filename = dataframegroup["filename"].iloc[0] # all the same
-    sources  = dataframegroup["Source"].unique() # unclear
-    fdata    = pandas.read_parquet(io.get_file(filename, suffix="psfshape.parquet", check_suffix=False),
-                                    columns=[datakey]).loc[sources].values.tolist()
-    return fdata
+def _residual_to_skydata_(residuals, buffer=2, statistic="median", returns="all"):
+    """ 
+    returns: [string]
+       - stamp: the stamp (or list of see, statistic)
+       - meanstat: the mean statistics (means, stds and npoints)
+       - all: stamp, meanstat
+    """
+    if returns not in ["stamp", "meanstat", "all", "both", "*"]:
+        raise ValueError(f"returns must be 'stamp', 'meanstat', 'all'/'both'/'*' {returns} given.")
+    
+    residuals  = residuals.reshape(len(residuals), 15, 15)
+    residuals[:, buffer:-buffer,buffer:-buffer] = np.NaN
+    if statistic is not None:
+        stampout = getattr(np,statistic)(residuals, axis=0)
+    else:
+        stampout = residuals
+    if returns == "stamp":
+        return stampout
+    means      = np.nanmean(residuals, axis=(1,2))
+    stds       = np.nanstd(residuals, axis=(1,2))
+    npoints    =  np.sum(~np.isnan(residuals), axis=(1,2))
+    
+    if returns == "meanstat":
+        return [means, stds, npoints]
+    else:
+        return residuals, [means, stds, npoints]
 
 
 
@@ -153,7 +160,7 @@ class PSFShapeAnalysis( object ):
 
 
         if within is not None:
-            (ucentroid, vcentroid), dist_ = self.get_center_pixel(), 2000
+            (ucentroid, vcentroid), dist_ = within
             if mpxl_args is None:
                 ub = self.bins_u-ucentroid
                 vb = self.bins_v-vcentroid
@@ -169,6 +176,97 @@ class PSFShapeAnalysis( object ):
         return mpxl_args
 
 
+    def get_fgroup_filename(self, metapixels, filenames=None, nfiles=None):
+        """ get filedata grouped by filename and associated filenames (see options)
+
+        Parameters
+        ----------
+        filenames: [list of path] -optional-
+            You can limit the list of file that are going to be analysed.
+            if None, all the files that have at least 1 target in the given metapixels
+        
+        nfiles: [int] -optional-
+            only look at the first n-files. 
+            = ignored if filenames is not None =
+            
+        Returns
+        -------
+        groupby(filename), filenames
+
+        """
+        fdata = self.get_metapixels_filedata(metapixels).compute()
+        fgroup = fdata.groupby("filename")
+        if filenames is None:
+            filenames = list(fgroup.groups.keys())
+            if nfiles is not None:
+                filenames = filenames[:nfiles]
+
+        return fgroup, filenames
+    
+    def cfetch_metapixels_data(self, metapixels, datakey, client=None, filenames=None, nfiles=None):
+        """ 
+        Parameters
+        ----------
+        client: [Dask Client]
+            Dask client used for the computation.
+
+        datakey: [string]
+            Any in from the psfshape.parquet file.
+
+        filenames: [list of path] -optional-
+            You can limit the list of file that are going to be analysed.
+            if None, all the files that have at least 1 target in the given metapixels
+        
+        nfiles: [int] -optional-
+            only look at the first n-files. 
+            = ignored if filenames is not None =
+
+        """        
+        fgroup, filenames = self.get_fgroup_filename(metapixels, filenames=filenames, nfiles=nfiles)
+            
+        d_data = [delayed(_fetch_filesource_data_)(fname, sources=fgroup.get_group(fname).Source.values,
+                                                        datakey=datakey) for fname in filenames]
+        if client is None and not self.has_client():
+            warnings.warn("No dask client given and no dask client sent to the instance. list of dask.delayed returned")
+            return d_data
+        elif client is None:
+            client = self.client
+            
+        return client.compute(d_data)
+    
+    def cfetch_metapixels_stamps(self, metapixels, which="stars", client=None, filenames=None, nfiles=None):
+        """ 
+        Parameters
+        ----------
+        which: [string]
+            which could only be 'stars', 'model' or 'residual'
+        
+        client: [Dask Client]
+            Dask client used for the computation.
+
+        datakey: [string]
+            Any in from the psfshape.parquet file.
+
+        filenames: [list of path] -optional-
+            You can limit the list of file that are going to be analysed.
+            if None, all the files that have at least 1 target in the given metapixels
+        
+        nfiles: [int] -optional-
+            only look at the first n-files. 
+            = ignored if filenames is not None =
+
+        """        
+        return self.cfetch_metapixels_data()
+            
+    def get_metapixels_filedata(self, metapixels):
+        """ """
+        subdata = self.data[ ["Source","filefracday","fieldid","ccdid","qid","filterid"]
+                           ][ self.data['u_digit,v_digit'].isin(metapixels) ]
+        subdata["filename"] = buildurl.build_filename_from_dataframe(subdata)
+        return subdata[["filename","Source"]]
+        
+
+    
     def get_metapixel_data(self, metapixel, columns=None):
         """ """
         if columns is not None:
@@ -181,9 +279,8 @@ class PSFShapeAnalysis( object ):
         """ """
         subdata = self.get_metapixel_data(metapixel, columns=["Source","filefracday","fieldid","ccdid","qid","filterid"])
         subdata["filename"] = buildurl.build_filename_from_dataframe(subdata)
+        fdata = subdata[["filename","Source"]]
         
-        
-    
     def get_metapixel_sources(self, metapixel, columns=["filename", "Source"], compute=True):
         """ """
         metapixeldata = self.grouped_digit.get_group(tuple(metapixel))
@@ -230,6 +327,8 @@ class PSFShapeAnalysis( object ):
             return client.gather(f_skies)
         
         return f_skies
+
+    
     # --------- #
     #  PLOTTER  #
     # --------- #
