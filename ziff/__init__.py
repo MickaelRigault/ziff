@@ -1,8 +1,8 @@
 import piff
-from .additional_piff_classes import BasisPolynomialPlusMap
+__version__="0.3.3"
 
-__version__="0.3.2"
+from models.pixelgridconvol import ConvolvedPixelGrid
+piff.ConvolvedPixelGrid = ConvolvedPixelGrid
 
-piff.BasisPolynomialPlusMap = BasisPolynomialPlusMap
 
 
