@@ -355,6 +355,6 @@ class ConvolvedPixelGrid( PixelGrid ):
         
         params_sq  = gaussian_filter(im_params.reshape(self.size,self.size), sigma_convol)
         if flatten:
-(            return params_sq.reshape(self.size*self.size)
+            return params_sq.reshape(self.size*self.size)
                  
         return params_sq
