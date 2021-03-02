@@ -23,6 +23,7 @@ class ConvolvedPixelGrid( PixelGrid ):
                                  logger=logger, start_sigma=start_sigma,
                                  degenerate=degenerate, **kwargs)
         
+        logger = galsim.config.LoggerWrapper(logger)
         self._nparams = size*size + self._EXTRA_TERM
         logger.debug("change nparams = %d (convoltion)",self._nparams)
         self._nparams_pixelgrid = size*size
