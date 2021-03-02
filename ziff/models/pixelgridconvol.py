@@ -263,9 +263,6 @@ class ConvolvedPixelGrid( PixelGrid ):
             dcdv /= self.scale
         else:
             coeffs, psfx, psfy = self.interp_calculate(u/self.scale, v/self.scale)
-
-        # Convol-> PixelGrig
-        #coeffs = self.get_pixelparams(coeffs, flatten=True)
         
         # Turn the (psfy,psfx) coordinates into an index into 1d parameter vector.
         index1d = self._indexFromPsfxy(psfx, psfy)
@@ -353,10 +350,11 @@ class ConvolvedPixelGrid( PixelGrid ):
     # --------------- #
     def get_pixelparams(self, params, flatten=True):
         """ """
-        im_params, extra_params = params[:self._EXTRA_TERM], params[-self._EXTRA_TERM:]
+        im_params, extra_params = params[:-self._EXTRA_TERM], params[-self._EXTRA_TERM:]
         sigma_convol = np.abs(extra_params[0])
         
         params_sq  = gaussian_filter(im_params.reshape(self.size,self.size), sigma_convol)
         if flatten:
-            return params_sq.reshape(self.size*self.size)
+(            return params_sq.reshape(self.size*self.size)
+                 
         return params_sq
