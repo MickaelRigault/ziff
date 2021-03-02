@@ -1080,7 +1080,7 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         ioconfig = self.get_config(imagefile=imagefile,catfile=catfile)["io"]
         # 
         if stamp_size is not None:
-            ioconfig["ioconfig"] = int(stamp_size)
+            ioconfig["stamp_size"] = int(stamp_size)
             
         #
         if nstars is not None:
