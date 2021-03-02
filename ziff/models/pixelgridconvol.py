@@ -126,8 +126,7 @@ class ConvolvedPixelGrid( PixelGrid ):
         # Each column column corresponds to a different x,y value in the model that could
         # contribute information about the given data pixel.
         coeffs, psfx, psfy = self.interp_calculate(u/self.scale, v/self.scale)
-        # Convol-> PixelGrig 
-        coeffs = self.get_pixelparams(coeffs, flatten=True)
+        # -> coeffs = size**2
         
         # Turn the (psfy,psfx) coordinates into an index into 1d parameter vector.
         index1d = self._indexFromPsfxy(psfx, psfy)
@@ -266,7 +265,7 @@ class ConvolvedPixelGrid( PixelGrid ):
             coeffs, psfx, psfy = self.interp_calculate(u/self.scale, v/self.scale)
 
         # Convol-> PixelGrig
-        coeffs = self.get_pixelparams(coeffs, flatten=True)
+        #coeffs = self.get_pixelparams(coeffs, flatten=True)
         
         # Turn the (psfy,psfx) coordinates into an index into 1d parameter vector.
         index1d = self._indexFromPsfxy(psfx, psfy)
