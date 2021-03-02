@@ -87,7 +87,7 @@ class ConvolvedPixelGrid( PixelGrid ):
         params_pixelgrid /= np.sum(params_pixelgrid)*self.pixel_area
         
         # + CHANGE: add an extra term ; sigma convolve 0 by default
-        params = np.append(params_pixelgrid, np.zeros(self._EXTRA_TERM))
+        params = np.append(params_pixelgrid, np.ones(self._EXTRA_TERM)*1e-5)
 
         starfit = StarFit(params, flux, center)
         return Star(star.data, starfit)
