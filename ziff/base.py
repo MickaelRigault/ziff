@@ -19,6 +19,7 @@ from . import catalog as catlib
 
 
 def estimate_psf(ziff, catalog,
+                     stamp_size=None,
                      nstars=None, interporder=None, maxoutliers=None,
                      store=True, verbose=True):
     """ """
@@ -41,6 +42,10 @@ def estimate_psf(ziff, catalog,
         
     if nstars is not None:
         config['io']['nstars'] = int(nstars)
+
+    if stamp_size is not None:
+        config['io']['stamp_size'] = int(stamp_size)
+        
         
     inputfile = piff.InputFiles(config["io"], logger=None)
     inputfile.setPointing('RA','DEC')
@@ -79,7 +84,8 @@ def get_psf_suffix(config, baseline="psf", extension=".piff"):
     return f'{baseline}_{config["psf"]["model"]["type"]}_{config["psf"]["interp"]["type"]}{config["psf"]["interp"]["order"]}{extension}'
 
 
-def get_shapes(ziff, psf, cat, incl_residual=False, incl_stars=False, store=True, **kwargs):
+def get_shapes(ziff, psf, cat, incl_residual=False, incl_stars=False, store=True,
+                   stamp_size=None, **kwargs):
     """ """
     if not ziff.has_images():
         warnings.warn("No image in the given ziff")
@@ -94,7 +100,7 @@ def get_shapes(ziff, psf, cat, incl_residual=False, incl_stars=False, store=True
         return None
     
     ziff.set_psf(psf)
-    stars     = ziff.get_stars(cat, fullreturn=False)
+    stars     = ziff.get_stars(cat, fullreturn=False, stamp_size=stamp_size)
 
     
     if len(stars) > cat.npoints:
@@ -1029,7 +1035,7 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         return stamps
 
     def get_stars(self, catalog, writeto="tmp", fullreturn=False,
-                      nstars="no_limit", imagefile=None,
+                      nstars="no_limit", imagefile=None, stamp_size=None,
                       filtered=True, verbose=False, **kwargs):
         """ return PIFF stars for the given catalog using get_piff_inputfile().makeStars() 
 
@@ -1072,7 +1078,10 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         # - build the piff input file using a copy of the i/o config
         
         ioconfig = self.get_config(imagefile=imagefile,catfile=catfile)["io"]
-        
+        # 
+        if stamp_size is not None:
+            ioconfig["ioconfig"] = int(stamp_size)
+            
         #
         if nstars is not None:
             if type(nstars) is str:

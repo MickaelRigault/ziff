@@ -16,7 +16,8 @@ import dask
 
 def ziffit_single(file_, use_dask=False, overwrite=False,
                       isolationlimit=10, waittime=None,
-                      nstars=300, interporder=3, maxoutliers=None, 
+                      nstars=300, interporder=3, maxoutliers=None,
+                      stamp_size=15,
                       fit_gmag=[15,16], shape_gmag=[15,19],
                       numpy_threads=None):
     """ high level script function of ziff to 
@@ -56,11 +57,11 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     cat_toshape= cats[1]
     #
     # - Fit the PSF
-    psf    = delayed(base.estimate_psf)(ziff, cat_toshape,
+    psf    = delayed(base.estimate_psf)(ziff, cat_toshape, stamp_size=stamp_size,
                                             interporder=interporder, nstars=nstars,
                                             maxoutliers=maxoutliers, verbose=False)
     # shapes
-    shapes  = delayed(base.get_shapes)(ziff, psf, cat_tofit, store=True)
+    shapes  = delayed(base.get_shapes)(ziff, psf, cat_tofit, stamp_size=stamp_size, store=True)
     
     return delayed(_get_ziffit_output_)(shapes)
 
