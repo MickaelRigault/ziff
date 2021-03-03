@@ -18,7 +18,7 @@ def collect_input(file_, use_dask=False, overwrite=False,
                       fit_gmag=[15,16], shape_gmag=[15,19],
                       numpy_threads=None):
     """ """
-    f numpy_threads is not None:
+    if numpy_threads is not None:
         limit_numpy(nthreads=numpy_threads)
 
     delayed = dask.delayed if use_dask else _not_delayed_
