@@ -13,7 +13,42 @@ import dask
 #from .. import __version__
 
 
+def collect_input(file_, use_dask=False, overwrite=False,
+                      isolationlimit=10, waittime=None,
+                      fit_gmag=[15,16], shape_gmag=[15,19],
+                      numpy_threads=None):
+    """ """
+    f numpy_threads is not None:
+        limit_numpy(nthreads=numpy_threads)
 
+    delayed = dask.delayed if use_dask else _not_delayed_
+
+    #
+    # - Waiting time is any
+    #
+    # - Get Files
+
+    # - This way, first sciimg, then mskimg, this enables not to overlead IRSA.
+    sciimg_mkimg = delayed(get_file_delayed)(file_, waittime=waittime,
+                                                 suffix=["sciimg.fits","mskimg.fits"],
+                                                 overwrite=overwrite, 
+                                                 show_progress= not use_dask, maxnprocess=1)
+    sciimg = sciimg_mkimg[0]
+    mkimg  = sciimg_mkimg[1]
+    #
+    # - Build Ziff    
+    ziff   = delayed(base.ZIFF)(sciimg, mkimg, fetch_psf=False)
+    #
+    # - Get the catalog    
+    cats  = delayed(get_ziffit_gaia_catalog)(ziff, fit_gmag=fit_gmag, shape_gmag=shape_gmag,
+                                                 isolationlimit=isolationlimit,shuffled=True)
+    cat_tofit  = cats[0]
+    cat_toshape= cats[1]
+    
+    return cat_tofit,cat_toshape
+
+    
+    
 def ziffit_single(file_, use_dask=False, overwrite=False,
                       isolationlimit=10, waittime=None,
                       nstars=300, interporder=3, maxoutliers=None,
