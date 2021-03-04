@@ -15,12 +15,8 @@ import dask
 
 def collect_input(file_, use_dask=False, overwrite=False,
                       isolationlimit=10, waittime=None,
-                      fit_gmag=[15,16], shape_gmag=[15,19],
-                      numpy_threads=None):
+                      fit_gmag=[15,16], shape_gmag=[15,19]):
     """ """
-    if numpy_threads is not None:
-        limit_numpy(nthreads=numpy_threads)
-
     delayed = dask.delayed if use_dask else _not_delayed_
 
     #
@@ -54,7 +50,7 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
                       nstars=300, interporder=3, maxoutliers=None,
                       stamp_size=15,
                       fit_gmag=[15,16], shape_gmag=[15,19],
-                      numpy_threads=None):
+                    verbose=False):
     """ high level script function of ziff to 
     - find the isolated star from gaia 
     - fit the PSF using piff
@@ -64,9 +60,6 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
 
 
     """
-    if numpy_threads is not None:
-        limit_numpy(nthreads=numpy_threads)
-
     delayed = dask.delayed if use_dask else _not_delayed_
 
     #
@@ -75,6 +68,8 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     # - Get Files
 
     # - This way, first sciimg, then mskimg, this enables not to overlead IRSA.
+    if verbose:
+        print("loading images")
     sciimg_mkimg = delayed(get_file_delayed)(file_, waittime=waittime,
                                                  suffix=["sciimg.fits","mskimg.fits"],
                                                  overwrite=overwrite, 
@@ -82,10 +77,14 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     sciimg = sciimg_mkimg[0]
     mkimg  = sciimg_mkimg[1]
     #
-    # - Build Ziff    
+    # - Build Ziff
+    if verbose:
+        print("loading ziff")
     ziff   = delayed(base.ZIFF)(sciimg, mkimg, fetch_psf=False)
     #
-    # - Get the catalog    
+    # - Get the catalog
+    if verbose:
+        print("loading cats")
     cats  = delayed(get_ziffit_gaia_catalog)(ziff, fit_gmag=fit_gmag, shape_gmag=shape_gmag,
                                                  isolationlimit=isolationlimit,shuffled=True)
     cat_tofit  = cats[0]
@@ -100,7 +99,7 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     
     return delayed(_get_ziffit_output_)(shapes)
 
-def compute_shapes(file_, use_dask=False, numpy_threads=None, incl_residual=False, incl_stars=False):
+def compute_shapes(file_, use_dask=False, incl_residual=False, incl_stars=False, whichpsf="psf_PixelGrid_BasisPolynomial5"):
     """ high level script function of ziff to 
     - compute and store the stars and psf-model shape parameters
 
@@ -109,13 +108,10 @@ def compute_shapes(file_, use_dask=False, numpy_threads=None, incl_residual=Fals
     = Dask oriented =
 
     """
-    if numpy_threads is not None:
-        limit_numpy(nthreads=numpy_threads)
-
     delayed = dask.delayed if use_dask else _not_delayed_
 
 
-    files_needed = delayed(io.get_file)(file_, suffix=["psf_PixelGrid_BasisPolynomial3.piff", 
+    files_needed = delayed(io.get_file)(file_, suffix=[whichpsf, 
                                                        "sciimg.fits", "mskimg.fits",
                                                        "shapecat_gaia.fits"], check_suffix=False)
     # Dask
@@ -181,15 +177,6 @@ def build_digitalized_shape(filenames, urange, vrange, chunks=50, nbins=200,
 # ================ #
 #    INTERNAL      #
 # ================ #
-def limit_numpy(nthreads=4):
-    """ """
-    threads = str(nthreads)
-    os.environ["NUMEXPR_NUM_THREADS"] = threads
-    os.environ["OMP_NUM_THREADS"] = threads
-    os.environ["OPENBLAS_NUM_THREADS"] = threads
-    os.environ["MKL_NUM_THREADS"] = threads
-    os.environ["VECLIB_MAXIMUM_THREADS"] = threads
-
 def _not_delayed_(func):
     return func
 
