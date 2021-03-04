@@ -191,13 +191,14 @@ class _ZIFFLogConfig_( object ):
     # -------- #
     #  SETTER  #
     # -------- #
-    def set_logger(self, logger=None, basename=None):
+    def set_logger(self, logger=None, basename=None, use_default=False):
         """ set the logger that is going to be passed to piff """
         if logger is None:
-            if basename is None:
-                basename = ""
-            logging.basicConfig(filename= basename + 'logger.piff',level=logging.DEBUG)
-            logger = logging.getLogger()
+            if use_default:
+                if basename is None:
+                    basename = ""
+                logging.basicConfig(filename= basename + 'logger.piff',level=logging.DEBUG)
+                logger = logging.getLogger()
             self._logger = logger
         else:
             self._logger = logger
