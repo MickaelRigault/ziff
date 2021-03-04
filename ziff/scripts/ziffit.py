@@ -99,6 +99,19 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     
     return delayed(_get_ziffit_output_)(shapes)
 
+def _get_ziff_psf_cat_(file_, whichpsf="psf_PixelGrid_BasisPolynomial5.piff"):
+    """ """
+    files_needed = io.get_file(file_, suffix=[whichpsf,"sciimg.fits", "mskimg.fits",
+                                              "shapecat_gaia.fits"], check_suffix=False)
+    # Dask
+    psffile, sciimg, mkimg, catfile = files_needed[0],files_needed[1],files_needed[2],files_needed[3]
+
+    ziff         = base.ZIFF(sciimg, mkimg, fetch_psf=False)
+    cat_toshape  = base.catlib.Catalog.load(catfile, wcs=ziff.wcs)
+    psf          = base.piff.PSF.read(file_name=psffile, logger=None)
+    
+    return ziff, psf, cat_toshape
+
 def compute_shapes(file_, use_dask=False, incl_residual=False, incl_stars=False,
                        whichpsf="psf_PixelGrid_BasisPolynomial5.piff", stamp_size=15):
     """ high level script function of ziff to 
@@ -112,16 +125,9 @@ def compute_shapes(file_, use_dask=False, incl_residual=False, incl_stars=False,
     delayed = dask.delayed if use_dask else _not_delayed_
 
 
-    files_needed = delayed(io.get_file)(file_, suffix=["psf_PixelGrid_BasisPolynomial3.piff", 
-                                                       "sciimg.fits", "mskimg.fits",
-                                                       "shapecat_gaia.fits"], check_suffix=False)
-    # Dask
-    psffile, sciimg, mkimg, catfile = files_needed[0],files_needed[1],files_needed[2],files_needed[3]
-
-    ziff         = delayed(base.ZIFF)(sciimg, mkimg, fetch_psf=False)
-    cat_toshape  = delayed(base.catlib.Catalog.load)(catfile, wcs=ziff.wcs)
-    psf          = delayed(base.piff.PSF.read)(file_name=psffile, logger=None)
-
+    input_needed = delayed(_get_ziff_psf_cat_)(file_, whichpsf=whichpsf)
+    ziff, psf, cat_toshape = input_needed[0],input_needed[1],input_needed[2]
+    
     shapes       = delayed(base.get_shapes)(ziff, psf, cat_toshape, store=True, stamp_size=stamp_size,
                                                 incl_residual=incl_residual, incl_stars=incl_stars)
     
