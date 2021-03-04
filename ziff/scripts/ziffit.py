@@ -99,7 +99,8 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     
     return delayed(_get_ziffit_output_)(shapes)
 
-def compute_shapes(file_, use_dask=False, incl_residual=False, incl_stars=False, whichpsf="psf_PixelGrid_BasisPolynomial5"):
+def compute_shapes(file_, use_dask=False, incl_residual=False, incl_stars=False,
+                       whichpsf="psf_PixelGrid_BasisPolynomial5.piff", stamp_size=15):
     """ high level script function of ziff to 
     - compute and store the stars and psf-model shape parameters
 
@@ -111,7 +112,7 @@ def compute_shapes(file_, use_dask=False, incl_residual=False, incl_stars=False,
     delayed = dask.delayed if use_dask else _not_delayed_
 
 
-    files_needed = delayed(io.get_file)(file_, suffix=[whichpsf, 
+    files_needed = delayed(io.get_file)(file_, suffix=["psf_PixelGrid_BasisPolynomial3.piff", 
                                                        "sciimg.fits", "mskimg.fits",
                                                        "shapecat_gaia.fits"], check_suffix=False)
     # Dask
@@ -121,7 +122,7 @@ def compute_shapes(file_, use_dask=False, incl_residual=False, incl_stars=False,
     cat_toshape  = delayed(base.catlib.Catalog.load)(catfile, wcs=ziff.wcs)
     psf          = delayed(base.piff.PSF.read)(file_name=psffile, logger=None)
 
-    shapes       = delayed(base.get_shapes)(ziff, psf, cat_toshape, store=True,
+    shapes       = delayed(base.get_shapes)(ziff, psf, cat_toshape, store=True, stamp_size=stamp_size,
                                                 incl_residual=incl_residual, incl_stars=incl_stars)
     
     return shapes[["sigma_model","sigma_data"]].median(axis=0).values
