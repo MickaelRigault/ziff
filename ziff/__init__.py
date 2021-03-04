@@ -10,7 +10,7 @@ def limit_numpy(nthreads=4):
     os.environ["MKL_NUM_THREADS"] = threads
     os.environ["VECLIB_MAXIMUM_THREADS"] = threads
 
-limit_numpy(nthreads=4)
+#limit_numpy(nthreads=4)
 
 
 
