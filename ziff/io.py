@@ -20,7 +20,7 @@ def get_psf_suffix(config, baseline="psf", extension=".piff"):
 def parse_psf_suffix(pifffile, expand=False):
     """ """
     _, filefracday, paddedfield, filtercode, ccd_, imgtypecode, qid_, *suffix_ = os.path.basename(pifffile).split("_")
-    return suffix_ if if expand else "_".join(suffix_)
+    return suffix_ if expand else "_".join(suffix_)
 
 
 def get_digit_dir(subdir="", builddir=True):
