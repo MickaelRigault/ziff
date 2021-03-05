@@ -1,4 +1,5 @@
 
+import os
 import warnings
 import numpy as np
 import pandas
@@ -224,7 +225,6 @@ class PSFShapeAnalysis( object ):
     def load_fromdir(self, directory, patern="*.parquet", urange=None, vrange=None, bins=None):
         """ provide the directory where the digitilized and chunked psfdata are.
         """
-        import os
         data = dd.read_parquet( os.path.join(directory, patern) )
         self.set_data(data, urange=urange, vrange=vrange, bins=bins)
         
