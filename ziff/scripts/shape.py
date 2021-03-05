@@ -113,15 +113,16 @@ class PSFShapeAnalysis( object ):
         return this
 
     @classmethod
-    def from_shapefiles(cls, shapefiles, urange, vrange, bins, client, chunks=300, subdir=None):
+    def from_shapefiles(cls, shapefiles, urange, vrange, bins, client, chunks=300,
+                            subdir=None, digit_basename="psfshape", **kwargs):
         """ """
         this = cls(client=client)
         this.set_binning(urange=urange, vrange=vrange, bins=bins)
 
         dirout = zio.get_digit_dir(subdir=subdir)
         savefile_base = os.path.join(dirout, digit_basename)
-        this.cbuild_digitalized_shapes(shapefiles, savefile_base,chunks=chunks,
-                                           load_data=True)
+        this.cbuild_digitalized_shapes(shapefiles, savefile_base,
+                                           chunks=chunks, load_data=True, **kwargs)
         return this
         
         
