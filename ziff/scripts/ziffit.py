@@ -166,7 +166,29 @@ def build_digitalized_shape(filenames, urange, vrange, savefile, bins=200, chunk
     return delayed_chunks
     
 
+def build_digitalize_psfdata(filenames, valrange, key, savefile,
+                              bins=200, chunks=300, **kwargs):
+    """ """
+    filedf = get_filedataframe(filenames)
+    grouped = filedf.groupby("filefracday")
+    groupkeys = list( grouped.groups.keys() )
     
+    bins_val = np.linspace(*valrange, bins)
+    chunck_filenames = [np.concatenate([grouped["filename"].get_group(g_).values for g_ in chunk])
+                            for chunk in np.array_split(groupkeys, chunks)]
+    
+    delayed_chunks = []
+    for i, cfile in enumerate(chunck_filenames):
+        delayed_chunks.append(dask.delayed(get_binned_data)(cfile, bins_val, key,
+                                savefile=None if savefile is None else savefile.replace(".parquet",
+                                                                        f"_{key}{bins}bins_chunk{i}.parquet"),**kwargs)
+                             )
+
+    return delayed_chunks
+    
+
+
+
 # ================ #
 #    INTERNAL      #
 # ================ #
@@ -208,7 +230,28 @@ def get_ziffit_gaia_catalog(ziff, isolationlimit=10,
         warnings.warn("Failed grabing the gaia catalogs, Nones returned")
         return None,None
 
+def get_binned_data(files, bin_val, key, savefile=None, columns=None,
+                    quantity='sigma', normref="model"):
+    """ """
+    filefracday = [f.split("/")[-1].split("_")[1] for f in files]
+    df = pandas.concat([pandas.read_parquet(f, columns=columns) for f in files], keys=filefracday
+                           ).reset_index().rename({"level_0":"filefracday"}, axis=1)
 
+
+    norm = df.groupby(["obsjd"])[f"{quantity}_{normref}"].transform("median")
+    
+    df[f"{quantity}_data_n"] = df[f"{quantity}_data"]/norm
+    df[f"{quantity}_model_n"] = df[f"{quantity}_model"]/norm
+    df[f"{quantity}_residual"] = (df[f"{quantity}_data"]-df[f"{quantity}_model"])/df[f"{quantity}_model"]
+    
+    df[f"{key}_digit"] = np.digitize(df[key], bin_val)
+    if savefile:
+        df.to_parquet(savefile)
+        
+    return df
+
+    
+    
 def get_sigma_data(files, bins_u, bins_v,
                     minimal=False,
                    quantity='sigma', normref="model", incl_residual=True,

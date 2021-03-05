@@ -117,7 +117,7 @@ def get_shapes(ziff, psf, cat, incl_residual=False, incl_stars=False, store=True
     #
     # - Information
     columns   = "flux", "centeru", "centerv", "sigma", "shapeg1", "shapeg2", "flag"
-    catdata   = cat.data[["ra","dec","xpos","ypos", "gmag","e_gmag","sky"]]
+    catdata   = cat.data[["ra","dec","xpos","ypos", "gmag","e_gmag","sky", 'rpmag', 'e_rpmag', 'bpmag', 'e_bpmag']]
     
     #
     # - DataFrame
