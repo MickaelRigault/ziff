@@ -169,8 +169,8 @@ class PSFShapeAnalysis( object ):
         list of: "futures or delayed" depending on client.
         """
         
-        if len(files) <= chunks:
-            raise ValueError(f"more chunks than files ({chunks} vs. {len(files)}")
+        if len(parquetfiles) <= chunks:
+            raise ValueError(f"more chunks than files ({chunks} vs. {len(parquetfiles)}")
 
         if np.any([v is None for v in self.binning.values()]):
             raise AttributeError(f"you need to set all the binning information: see self.set_binning(). current: {self.binning}")
