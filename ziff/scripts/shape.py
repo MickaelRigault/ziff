@@ -64,7 +64,7 @@ class PSFShapeAnalysis( object ):
     def __init__(self, client=None):
         """ """
         if client is not None:
-            this.set_client(client)
+            self.set_client(client)
 
             
     @classmethod
