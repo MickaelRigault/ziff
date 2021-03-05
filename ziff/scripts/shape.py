@@ -213,7 +213,7 @@ class PSFShapeAnalysis( object ):
             self.data["u_digit,v_digit"] = self.data["u_digit"].astype("str")+","+ self.data["v_digit"].astype("str")
 
         if persist and self.has_client():
-            self._data = client.persist(self.data)
+            self._data = self.client.persist(self.data)
 
     def set_binning(self, urange, vrange, bins):
         """ """
