@@ -5,7 +5,7 @@ import numpy as np
 import pandas
 
 import dask.dataframe as dd
-from dask import delayed
+from dask import delayed, distributed
 
 
 from . import ziffit
@@ -93,7 +93,6 @@ class PSFShapeAnalysis( object ):
         #
         # - build shapes        
         if build_shapes:
-            from dask import distributed
             f_shapes = this.cbuild_shapes(pifffiles, psf_suffix=psfmodel, stamp_size=stamp_size)
             futures_, _ = distributed.wait(f_shapes)
             
