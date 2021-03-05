@@ -8,6 +8,7 @@ from dask import delayed
 
 
 from . import ziffit
+from .. import io as zio
 from ztfquery import buildurl,io
 
 import pandas
@@ -60,18 +61,139 @@ def _residual_to_skydata_(residuals, buffer=2, statistic="median", returns="all"
 
 class PSFShapeAnalysis( object ):
     """ """
-    def __init__(self):
+    def __init__(self, client=None):
         """ """
-        
+        if client is not None:
+            this.set_client(client)
+
+            
     @classmethod
-    def from_directory(cls, directory, patern="*.parquet", urange=None, vrange=None, bins=None):
+    def from_directory(cls, directory, patern="*.parquet", urange=None, vrange=None, bins=None, client=None):
+        """ provide the directory where the digitilized and chunked psfdata are.
+        """
+        this = cls(client=client)
+        this.load_fromdir(directory, patern=patern,
+                            urange=urange, vrange=vrange, bins=bins)
+        return this
+
+    @classmethod
+    def from_pifffiles(cls, pifffiles, urange, vrange, bins, client,
+                           psf_suffix=None, subdir=None, digit_basename="psfshape",
+                           build_shapes=True, stamp_size=17, chunks=300):
         """ """
-        import os
-        this = cls()
-        data = dd.read_parquet(os.path.join(directory,patern))
-        this.set_data(data, urange=urange, vrange=vrange, bins=bins)
+        print("This has not been test")
+        this = cls(client=client)
+        this.set_binning(urange=urange, vrange=vrange, bins=bins)
+        if psf_suffix is None:
+            psf_suffix = zio.parse_psf_suffix(pifffiles[0], expand=False)
+            # psfmodel has the format psf_model_interp.piff
+            
+        
+        #
+        # - build shapes        
+        if build_shapes:
+            from dask import distributed
+            f_shapes = this.cbuild_shapes(pifffiles, psf_suffix=psfmodel, stamp_size=stamp_size)
+            futures_, _ = distributed.wait(f_shapes)
+            
+        #
+        # - To compute
+        to_compute = [f.replace(psfmodel, "psfshape.parquet") for f in pifffiles
+                          if os.path.isfile(f.replace(psfmodel, "psfshape.parquet"))]
+
+        dirout = zio.get_digit_dir(psf_suffix, subdir)
+        savefile_base = os.path.join(dirout, digit_basename)
+        f_digit = this.cbuild_digitalized_shapes(to_compute, savefile_base, chunks=chunks)
+        # - 
+        futures_, _ = distributed.wait(f_digit)
+        # -
+        bins = self.binning["bins"]
+        this.load_fromdir(dirout, patern=savefile_base+f"*{bins}*.parquet")
+        return this
+
+    @classmethod
+    def from_shapefiles(cls, shapefiles, urange, vrange, bins, client, chunks=300, subdir=None):
+        """ """
+        this = cls(client=client)
+        this.set_binning(urange=urange, vrange=vrange, bins=bins)
+
+        dirout = zio.get_digit_dir(subdir=subdir)
+        savefile_base = os.path.join(dirout, digit_basename)
+        this.cbuild_digitalized_shapes(shapefiles, savefile_base,chunks=chunks,
+                                           load_data=True)
         return this
         
+        
+    # --------- #
+    #  Builder  #
+    # --------- #
+    def cbuild_shapes(self, sciimgfiles, client=None, psf_suffix="psf_PixelGrid_BasisPolynomial5.piff",
+                          stamp_size=17, **kwargs):
+        """ """
+        delayed_shapes = [ziffit.compute_shapes(f_, use_dask=True, incl_residual=True, incl_stars=True,
+                                             whichpsf=psf_suffix,
+                                             stamp_size=stamp_size, **kwargs)
+                    for f_ in sciimgfiles]
+
+        #
+        # - Client or not
+        #
+        if client is None and not self.has_client():
+            warnings.warn("No dask client given and no dask client sent to the instance. list of dask.delayed returned")
+            return delayed_shapes
+        elif client is None:
+            client = self.client
+            
+        # - Client, so let's compute   
+        return client.compute(delayed_shapes)
+        
+    def cbuild_digitalized_shapes(self, parquetfiles, savefile_base, client=None,
+                                      chunks=300, load_data=False, **kwargs):
+        """ 
+        Parameters
+        ----------
+        parquetfiles: [list of path]
+            The psfshape parquet files to be digitalized.w
+
+        savefile_base: [string]
+            Incomplete full path used to create the structure of the digitalized data.
+            the finale names will be:
+            savefile_base + "_{bins}bins_chunk{i}.parquet"
+            
+
+        **kwargs goes to ziffit.build_digitalized_shape
+        Returns
+        -------
+        list of: "futures or delayed" depending on client.
+        """
+        
+        if len(files) <= chunks:
+            raise ValueError(f"more chunks than files ({chunks} vs. {len(files)}")
+
+        if np.any([v is None for v in self.binning.values()]):
+            raise AttributeError(f"you need to set all the binning information: see self.set_binning(). current: {self.binning}")
+        
+        bins = self.binning['bins']
+        savefile = savefile_base + f"_{bins}bins.parquet"
+        data_delayed = ziffit.build_digitalized_shape(parquetfiles, chunks=chunks,
+                                                        savefile=savefile, # _chunk{i} added inside 
+                                                       **{**self.binning, **kwargs})
+        #
+        # - Client or not
+        #
+        if client is None and not self.has_client():
+            warnings.warn("No dask client given and no dask client sent to the instance. list of dask.delayed returned")
+            return data_delayed
+        elif client is None:
+            client = self.client
+        # - Client, so let's compute
+        futures = client.compute(data_delayed)
+        if load_data:
+            futures = distributed.wait(futures)
+            self.load_fromdir(os.path.dirname(savefile),os.path.basename(savefile).replace(".parquet","*.parquet"))
+            return 
+        return futures
+
     # --------- #
     #  SETTER   #
     # --------- #
@@ -99,6 +221,13 @@ class PSFShapeAnalysis( object ):
     # --------- #
     #  LOADER   #
     # --------- #
+    def load_fromdir(self, directory, patern="*.parquet", urange=None, vrange=None, bins=None):
+        """ provide the directory where the digitilized and chunked psfdata are.
+        """
+        import os
+        data = dd.read_parquet( os.path.join(directory, patern) )
+        self.set_data(data, urange=urange, vrange=vrange, bins=bins)
+        
     def load_medianserie(self):
         """ """
         self._seriemedian = self.grouped_digit[["sigma_model_n","sigma_data_n","sigma_residual"]
@@ -265,8 +394,6 @@ class PSFShapeAnalysis( object ):
         subdata["filename"] = buildurl.build_filename_from_dataframe(subdata)
         return subdata[["filename","Source"]]
         
-
-    
     def get_metapixel_data(self, metapixel, columns=None):
         """ """
         if columns is not None:

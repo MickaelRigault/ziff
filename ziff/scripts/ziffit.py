@@ -95,7 +95,8 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
                                             interporder=interporder, nstars=nstars,
                                             maxoutliers=maxoutliers, verbose=False)
     # shapes
-    shapes  = delayed(base.get_shapes)(ziff, psf, cat_tofit, stamp_size=stamp_size, store=True)
+    shapes  = delayed(base.get_shapes)(ziff, psf, cat_tofit, store=True, stamp_size=stamp_size,
+                                                incl_residual=True, incl_stars=True)
     
     return delayed(_get_ziffit_output_)(shapes)
 
@@ -112,7 +113,7 @@ def _get_ziff_psf_cat_(file_, whichpsf="psf_PixelGrid_BasisPolynomial5.piff"):
     
     return ziff, psf, cat_toshape
 
-def compute_shapes(file_, use_dask=False, incl_residual=False, incl_stars=False,
+def compute_shapes(file_, use_dask=False, incl_residual=True, incl_stars=True,
                        whichpsf="psf_PixelGrid_BasisPolynomial5.piff", stamp_size=15):
     """ high level script function of ziff to 
     - compute and store the stars and psf-model shape parameters
@@ -134,51 +135,36 @@ def compute_shapes(file_, use_dask=False, incl_residual=False, incl_stars=False,
     return shapes[["sigma_model","sigma_data"]].median(axis=0).values
 
     
-def build_digitalized_shape(filenames, urange, vrange, chunks=50, nbins=200,
-                            savefile=None, minimal=True, return_delayed=False, **kwargs):
+def build_digitalized_shape(filenames, urange, vrange, savefile, bins=200, chunks=300, 
+                            minimal=True, **kwargs):
     """ high level script function of ziff to 
     - read the computed shape parameters
 
     = Dask oriented =
+
+    - Returns delayed calls - 
 
     """
     filedf = get_filedataframe(filenames)
     grouped = filedf.groupby("filefracday")
     groupkeys = list( grouped.groups.keys() )
     
-    bins_u = np.linspace(*urange, nbins)
-    bins_v = np.linspace(*vrange, nbins)
+    bins_u = np.linspace(*urange, bins)
+    bins_v = np.linspace(*vrange, bins)
 
     chunck_filenames = [np.concatenate([grouped["filename"].get_group(g_).values for g_ in chunk])
                             for chunk in np.array_split(groupkeys, chunks)]
 
     
-    dfs = []
+    delayed_chunks = []
     for i, cfile in enumerate(chunck_filenames):
-        dfs.append(dask.delayed(get_sigma_data)(cfile, bins_u, bins_v, minimal=minimal,
-                                                savefile=None if savefile is None else savefile.replace(".parquet",f"_chunk{i}.parquet"),**kwargs
-                                               )
-                  )
+        delayed_chunks.append(dask.delayed(get_sigma_data)(cfile, bins_u, bins_v, minimal=minimal,
+                                                savefile=None if savefile is None else savefile.replace(".parquet",f"_chunk{i}.parquet"),**kwargs)
+                             )
 
-    if return_delayed:
-        return dfs
+        
+    return delayed_chunks
     
-    dd = dask.compute(dfs)
-    
-    data = pandas.concat(dd[0])
-    
-    if savefile is not None:
-        extension = savefile.split(".")
-        if extension == "parquet":
-            data.to_parquet(savefile)
-        elif extension == "csv":
-            data.to_csv(savefile)
-        elif extension in ["hdf5", "hdf","h5"]:
-            data.to_hdf(savefile)
-        else:
-            warnings.warn(f"Cannot store the file, unrecongized extension {extension}")
-            
-    return data
 
     
 # ================ #

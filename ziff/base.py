@@ -16,7 +16,7 @@ import piff
 from ztfimg import image as ztfimage
 
 from . import catalog as catlib
-
+from . import io
 
 def estimate_psf(ziff, catalog,
                      stamp_size=None,
@@ -57,7 +57,7 @@ def estimate_psf(ziff, catalog,
     psf.fit(stars, wcs, pointing, logger=None)
     
     if store:
-        psfout = ziff.build_filename(get_psf_suffix(config), extension="")[0]
+        psfout = ziff.build_filename(io.get_psf_suffix(config), extension="")[0]
         if verbose:
             print(f"storing psf to : {psfout}")
         psf.write(psfout)
@@ -78,10 +78,6 @@ def get_gaia_catalog(ziff, writeto="default", gmag_range=[15, 16], isolationlimi
                               xyformat="fortran")
     
     return cat_to_fit
-
-def get_psf_suffix(config, baseline="psf", extension=".piff"):
-    """ """
-    return f'{baseline}_{config["psf"]["model"]["type"]}_{config["psf"]["interp"]["type"]}{config["psf"]["interp"]["order"]}{extension}'
 
 
 def get_shapes(ziff, psf, cat, incl_residual=False, incl_stars=False, store=True,
