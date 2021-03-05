@@ -191,7 +191,8 @@ class PSFShapeAnalysis( object ):
         futures = client.compute(data_delayed)
         if load_data:
             futures = distributed.wait(futures)
-            self.load_fromdir(os.path.dirname(savefile),os.path.basename(savefile).replace(".parquet","*.parquet"))
+            self.load_fromdir(os.path.dirname(savefile),os.path.basename(savefile).replace(".parquet","*.parquet"),
+                                  **self.binning)
             return 
         return futures
 
@@ -459,7 +460,7 @@ class PSFShapeAnalysis( object ):
     # --------- #
     #  PLOTTER  #
     # --------- #
-    def show_psfshape_maps(self, savefile=None, vmin="3", vmax="97"):
+    def show_psfshape_maps(self, savefile=None, vmin="3", vmax="97", cvmin=-0.8, cvmax=0.8):
         """ """
         from ziff.plots import get_threeplot_axes, vminvmax_parser, display_binned2d
 
@@ -477,8 +478,8 @@ class PSFShapeAnalysis( object ):
 
         imr = display_binned2d(axr, self.shapemaps["residual"]*100, cax=caxr, 
                                       **{**prop,**{"cmap":"coolwarm",
-                                                   "vmin":-0.8,"vmax":+0.8}})
-        imr.colorbar.set_ticks([-0.5,0,0.5])
+                                                   "vmin":cvmin,"vmax":cvmax}})
+        imr.colorbar.set_ticks([-np.round(cvmin*2/3, 2), 0, np.round(cvmax*2/3, 2)])
         [ax.set_yticklabels(["" for _ in ax.get_yticklabels()]) for ax in [axm, axr]]
 
 
