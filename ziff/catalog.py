@@ -1516,6 +1516,8 @@ class _CatalogHolder_( object ):
             # - Special cases
             if writeto == "default":
                 writeto = catalog.build_filename(self.prefix)
+            elif writeto == "psf":
+                writeto = catalog.build_filename(self.prefix+"psfcat_", extension=".fits")
             elif  writeto == "shape":
                 writeto = catalog.build_filename(self.prefix+"shapecat_", extension=".fits")
             elif  writeto == "prefixtmp":

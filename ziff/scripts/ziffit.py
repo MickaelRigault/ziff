@@ -13,9 +13,14 @@ import dask
 #from .. import __version__
 
 
+DEFAULT_FIT_GMAG=[13, 18]
+DEFAULT_SHAPE_GMAG=[13,18]
+DEFAULT_ISOLATION = 14
+    
 def collect_input(file_, use_dask=False, overwrite=False,
-                      isolationlimit=10, waittime=None,
-                      fit_gmag=[15,16], shape_gmag=[15,19]):
+                      waittime=None,
+                      isolationlimit=DEFAULT_ISOLATION, 
+                      fit_gmag=DEFAULT_FIT_GMAG, shape_gmag=DEFAULT_SHAPE_GMAG):
     """ """
     delayed = dask.delayed if use_dask else _not_delayed_
 
@@ -46,10 +51,10 @@ def collect_input(file_, use_dask=False, overwrite=False,
     
     
 def ziffit_single(file_, use_dask=False, overwrite=False,
-                      isolationlimit=10, waittime=None,
-                      nstars=300, interporder=3, maxoutliers=None,
+                      isolationlimit=DEFAULT_ISOLATION, waittime=None,
+                      nstars=800, interporder=3, maxoutliers=None,
                       stamp_size=15,
-                      fit_gmag=[15,16], shape_gmag=[15,19],
+                      fit_gmag=DEFAULT_FIT_GMAG, shape_gmag=DEFAULT_SHAPE_GMAG,
                     verbose=False):
     """ high level script function of ziff to 
     - find the isolated star from gaia 
@@ -201,8 +206,8 @@ def _get_ziffit_output_(shapes):
         return shapes[["sigma_model","sigma_data"]].median(axis=0).values
     return [None,None]
 
-def get_ziffit_gaia_catalog(ziff, isolationlimit=10,
-                                fit_gmag=[15, 16], shape_gmag=[15,18],
+def get_ziffit_gaia_catalog(ziff, isolationlimit=DEFAULT_ISOLATION,
+                                fit_gmag=DEFAULT_FIT_GMAG, shape_gmag=DEFAULT_SHAPE_GMAG,
                                 shuffled=True, verbose=True):
     """ """
     if not ziff.has_images():
@@ -216,12 +221,12 @@ def get_ziffit_gaia_catalog(ziff, isolationlimit=10,
             ziff.fetch_gaia_catalog(isolationlimit=isolationlimit)
         
         cat_to_fit   = ziff.get_catalog("gaia", filtered=True, shuffled=shuffled, 
-                              writeto="default",
+                              writeto="psf", #psfcat_gaia.fits
                               add_filter={'gmag_outrange':['gmag', fit_gmag]},
                               xyformat="fortran")
     
         cat_to_shape = ziff.get_catalog("gaia", filtered=True, shuffled=shuffled, 
-                              writeto="shape",
+                              writeto="shape", #shapecat_gaia.fits
                               add_filter={'gmag_outrange':['gmag', shape_gmag]},
                               xyformat="fortran")
     
@@ -317,8 +322,7 @@ def get_file_delayed(file_, waittime=None,
     if waittime is not None:
         time.sleep(waittime)
         
-    return io.get_file(file_, waittime=waittime,
-                        suffix=suffix, overwrite=overwrite, 
+    return io.get_file(file_, suffix=suffix, overwrite=overwrite, 
                         show_progress=show_progress, maxnprocess=maxnprocess)
     
 # ================ #
