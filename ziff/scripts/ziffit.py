@@ -55,7 +55,7 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
                       nstars=800, interporder=3, maxoutliers=None,
                       stamp_size=15,
                       fit_gmag=DEFAULT_FIT_GMAG, shape_gmag=DEFAULT_SHAPE_GMAG,
-                    verbose=False):
+                      verbose=False):
     """ high level script function of ziff to 
     - find the isolated star from gaia 
     - fit the PSF using piff
@@ -91,7 +91,8 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
     if verbose:
         print("loading cats")
     cats  = delayed(get_ziffit_gaia_catalog)(ziff, fit_gmag=fit_gmag, shape_gmag=shape_gmag,
-                                                 isolationlimit=isolationlimit,shuffled=True)
+                                              isolationlimit=isolationlimit,
+                                              shuffled=True)
     cat_tofit  = cats[0]
     cat_toshape= cats[1]
     #
@@ -140,56 +141,7 @@ def compute_shapes(file_, use_dask=False, incl_residual=True, incl_stars=True,
     return shapes[["sigma_model","sigma_data"]].median(axis=0).values
 
     
-def build_digitalized_shape(filenames, urange, vrange, savefile, bins=200, chunks=300, 
-                            minimal=True, **kwargs):
-    """ high level script function of ziff to 
-    - read the computed shape parameters
 
-    = Dask oriented =
-
-    - Returns delayed calls - 
-
-    """
-    filedf = get_filedataframe(filenames)
-    grouped = filedf.groupby("filefracday")
-    groupkeys = list( grouped.groups.keys() )
-    
-    bins_u = np.linspace(*urange, bins)
-    bins_v = np.linspace(*vrange, bins)
-
-    chunck_filenames = [np.concatenate([grouped["filename"].get_group(g_).values for g_ in chunk])
-                            for chunk in np.array_split(groupkeys, chunks)]
-
-    
-    delayed_chunks = []
-    for i, cfile in enumerate(chunck_filenames):
-        delayed_chunks.append(dask.delayed(get_sigma_data)(cfile, bins_u, bins_v, minimal=minimal,
-                                                savefile=None if savefile is None else savefile.replace(".parquet",f"_chunk{i}.parquet"),**kwargs)
-                             )
-
-        
-    return delayed_chunks
-    
-
-def build_digitalize_psfdata(filenames, valrange, key, savefile,
-                              bins=200, chunks=300, **kwargs):
-    """ """
-    filedf = get_filedataframe(filenames)
-    grouped = filedf.groupby("filefracday")
-    groupkeys = list( grouped.groups.keys() )
-    
-    bins_val = np.linspace(*valrange, bins)
-    chunck_filenames = [np.concatenate([grouped["filename"].get_group(g_).values for g_ in chunk])
-                            for chunk in np.array_split(groupkeys, chunks)]
-    
-    delayed_chunks = []
-    for i, cfile in enumerate(chunck_filenames):
-        delayed_chunks.append(dask.delayed(get_binned_data)(cfile, bins_val, key,
-                                savefile=None if savefile is None else savefile.replace(".parquet",
-                                                                        f"_{key}{bins}bins_chunk{i}.parquet"),**kwargs)
-                             )
-
-    return delayed_chunks
     
 
 
@@ -254,8 +206,6 @@ def get_binned_data(files, bin_val, key, savefile=None, columns=None,
         df.to_parquet(savefile)
         
     return df
-
-    
     
 def get_sigma_data(files, bins_u, bins_v,
                     minimal=False,

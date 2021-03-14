@@ -1,22 +1,145 @@
 
+""" PSF Shape Analysis """
+
 import os
 import warnings
 import numpy as np
 import pandas
 
+import dask
 import dask.dataframe as dd
-from dask import delayed, distributed
+from dask import distributed
 
-
-from . import ziffit
-from .. import io as zio
 from ztfquery import buildurl,io
 
-import pandas
-from ztfquery import io
+from .. import base
+from .. import io as zio
+from . import basecluster
+
+def compute_shapes(file_, use_dask=False, incl_residual=True, incl_stars=True,
+                       whichpsf="psf_PixelGrid_BasisPolynomial5.piff",
+                       stamp_size=17):
+    """ high level script function of ziff to 
+    - compute and store the stars and psf-model shape parameters
+
+    This re-perform the last steps of ziffit_single.
+
+    = Dask oriented =
+
+    """
+    delayed = basecluster.get_delayed_func(use_dask=use_dask)
+
+    input_needed = delayed(_get_ziff_psf_cat_)(file_, whichpsf=whichpsf)
+    ziff, psf, cat_toshape = input_needed[0],input_needed[1],input_needed[2]
+    
+    shapes       = delayed(base.get_shapes)(ziff, psf, cat_toshape, store=True, stamp_size=stamp_size,
+                                                incl_residual=incl_residual, incl_stars=incl_stars)
+    
+    return shapes[["sigma_model","sigma_data"]].median(axis=0).values
+
+def build_digitalized_shape(filenames, urange, vrange, savefile, bins=200, chunks=300, 
+                            minimal=True, **kwargs):
+    """ high level script function of ziff to 
+    - read the computed shape parameters
+
+    = Dask oriented =
+
+    - Returns delayed calls - 
+
+    """
+    filedf = get_filedataframe(filenames)
+    grouped = filedf.groupby("filefracday")
+    groupkeys = list( grouped.groups.keys() )
+    
+    bins_u = np.linspace(*urange, bins)
+    bins_v = np.linspace(*vrange, bins)
+
+    chunck_filenames = [np.concatenate([grouped["filename"].get_group(g_).values for g_ in chunk])
+                            for chunk in np.array_split(groupkeys, chunks)]
+    
+    delayed_chunks = []
+    for i, cfile in enumerate(chunck_filenames):
+        delayed_chunks.append(dask.delayed(get_sigma_data)(cfile, bins_u, bins_v, minimal=minimal,
+                                                savefile=None if savefile is None else savefile.replace(".parquet",f"_chunk{i}.parquet"),**kwargs))
+        
+    return delayed_chunks
+    
+
+def build_digitalize_psfdata(filenames, valrange, key, savefile,
+                              bins=200, chunks=300, **kwargs):
+    """ """
+    filedf = get_filedataframe(filenames)
+    grouped = filedf.groupby("filefracday")
+    groupkeys = list( grouped.groups.keys() )
+    
+    bins_val = np.linspace(*valrange, bins)
+    chunck_filenames = [np.concatenate([grouped["filename"].get_group(g_).values for g_ in chunk])
+                            for chunk in np.array_split(groupkeys, chunks)]
+    
+    delayed_chunks = []
+    for i, cfile in enumerate(chunck_filenames):
+        delayed_chunks.append(dask.delayed(get_binned_data)(cfile, bins_val, key,
+                                savefile=None if savefile is None else savefile.replace(".parquet",
+                                                                        f"_{key}{bins}bins_chunk{i}.parquet"),**kwargs))
+
+    return delayed_chunks
+
+def get_binned_data(files, bin_val, key, savefile=None, columns=None,
+                    quantity='sigma', normref="model"):
+    """ """
+    filefracday = [f.split("/")[-1].split("_")[1] for f in files]
+    df = pandas.concat([pandas.read_parquet(f, columns=columns) for f in files], keys=filefracday
+                           ).reset_index().rename({"level_0":"filefracday"}, axis=1)
 
 
-def _fetch_filesource_data_(filename, datakey, sources=None):
+    norm = df.groupby(["obsjd"])[f"{quantity}_{normref}"].transform("median")
+    
+    df[f"{quantity}_data_n"] = df[f"{quantity}_data"]/norm
+    df[f"{quantity}_model_n"] = df[f"{quantity}_model"]/norm
+    df[f"{quantity}_residual"] = (df[f"{quantity}_data"]-df[f"{quantity}_model"])/df[f"{quantity}_model"]
+    
+    df[f"{key}_digit"] = np.digitize(df[key], bin_val)
+    if savefile:
+        df.to_parquet(savefile)
+        
+    return df
+    
+def get_sigma_data(files, bins_u, bins_v,
+                    minimal=False,
+                   quantity='sigma', normref="model", incl_residual=True,
+                   basecolumns=['u', 'v', 'ccdid', 'qid', 'rcid', 'obsjd', 'fieldid','filterid', 'maglim'],
+                   savefile=None,
+                  ):
+    if minimal:
+        shape_columns = [f"{quantity}_data",  f"{quantity}_model"]
+        incl_residual = False
+    else:
+        shape_columns = [f"sigma_data",f"sigma_model"] + \
+                        [f"shapeg2_data",f"shapeg2_model"] + \
+                        [f"shapeg1_data",f"shapeg1_model"] + \
+                        [f"centerv_data",f"centerv_model"] + \
+                        [f"centeru_data",f"centeru_model"]
+    columns = basecolumns + shape_columns
+    if incl_residual: 
+        columns += ["residual"]
+
+    filefracday = [f.split("/")[-1].split("_")[1] for f in files]
+    df = pandas.concat([pandas.read_parquet(f, columns=columns) for f in files], keys=filefracday
+                           ).reset_index().rename({"level_0":"filefracday"}, axis=1)
+    
+    norm = df.groupby(["obsjd"])[f"{quantity}_{normref}"].transform("median")
+    
+    df[f"{quantity}_data_n"] = df[f"{quantity}_data"]/norm
+    df[f"{quantity}_model_n"] = df[f"{quantity}_model"]/norm
+    df[f"{quantity}_residual"] = (df[f"{quantity}_data"]-df[f"{quantity}_model"])/df[f"{quantity}_model"]
+    df["u_digit"] = np.digitize(df["u"],bins_u)
+    df["v_digit"] = np.digitize(df["v"],bins_v)
+    if savefile:
+        df.to_parquet(savefile)
+    return df
+
+
+def fetch_parquetsource_data(filename, datakey, sources=None):
     """ """
     data    = pandas.read_parquet(io.get_file(filename, suffix="psfshape.parquet", check_suffix=False),
                                     columns=[datakey])
@@ -26,51 +149,21 @@ def _fetch_filesource_data_(filename, datakey, sources=None):
     return data.values.tolist()
 
 
-def _fetch_filesource_sky_(filename, buffer=2, datakey="stars", sources=None,
-                               statistic="median", **kwargs):
+
+
+# =========================== #
+#                             #
+#  PSF Shape Analysis Class   #
+#                             #
+# =========================== #
+
+class PSFShapeAnalysis( basecluster.DaskCluster ):
     """ """
-    res = _fetch_filesource_data_(filename, datakey, sources=sources)
-    return _residual_to_skydata_(np.asarray(res), buffer=buffer, statistic=statistic, **kwargs)
-
-def _residual_to_skydata_(residuals, buffer=2, statistic="median", returns="all"):
-    """ 
-    returns: [string]
-       - stamp: the stamp (or list of see, statistic)
-       - meanstat: the mean statistics (means, stds and npoints)
-       - all: stamp, meanstat
-    """
-    if returns not in ["stamp", "meanstat", "all", "both", "*"]:
-        raise ValueError(f"returns must be 'stamp', 'meanstat', 'all'/'both'/'*' {returns} given.")
-    
-    residuals  = residuals.reshape(len(residuals), 15, 15)
-    residuals[:, buffer:-buffer,buffer:-buffer] = np.NaN
-    if statistic is not None:
-        stampout = getattr(np,statistic)(residuals, axis=0)
-    else:
-        stampout = residuals
-    if returns == "stamp":
-        return stampout
-    means      = np.nanmean(residuals, axis=(1,2))
-    stds       = np.nanstd(residuals, axis=(1,2))
-    npoints    =  np.sum(~np.isnan(residuals), axis=(1,2))
-    
-    if returns == "meanstat":
-        return [means, stds, npoints]
-    else:
-        return residuals, [means, stds, npoints]
-
-
-
-class PSFShapeAnalysis( object ):
-    """ """
-    def __init__(self, client=None):
-        """ """
-        if client is not None:
-            self.set_client(client)
-
             
     @classmethod
-    def from_directory(cls, directory, patern="*.parquet", urange=None, vrange=None, bins=None, client=None):
+    def from_directory(cls, directory, patern="*.parquet",
+                        urange=None, vrange=None, bins=None,
+                        client=None):
         """ provide the directory where the digitilized and chunked psfdata are.
         """
         this = cls(client=client)
@@ -90,7 +183,6 @@ class PSFShapeAnalysis( object ):
             psf_suffix = zio.parse_psf_suffix(pifffiles[0], expand=False)
             # psfmodel has the format psf_model_interp.piff
             
-        
         #
         # - build shapes        
         if build_shapes:
@@ -125,33 +217,37 @@ class PSFShapeAnalysis( object ):
                                            chunks=chunks, load_data=True, **kwargs)
         return this
         
+    # --------- #
+    #  GETTER   #
+    # --------- #
+
         
     # --------- #
     #  Builder  #
     # --------- #
     def cbuild_shapes(self, sciimgfiles, client=None, psf_suffix="psf_PixelGrid_BasisPolynomial5.piff",
                           stamp_size=17, **kwargs):
-        """ """
-        delayed_shapes = [ziffit.compute_shapes(f_, use_dask=True, incl_residual=True, incl_stars=True,
-                                             whichpsf=psf_suffix,
-                                             stamp_size=stamp_size, **kwargs)
-                    for f_ in sciimgfiles]
+        """ Measures the shapes parameters from the sciimgs (looking for the psf files) """
+        delayed_shapes = [compute_shapes(f_, use_dask=True, incl_residual=True, incl_stars=True,
+                                         whichpsf=psf_suffix,
+                                         stamp_size=stamp_size, **kwargs)
+                              for f_ in sciimgfiles]
 
         #
         # - Client or not
         #
-        if client is None and not self.has_client():
-            warnings.warn("No dask client given and no dask client sent to the instance. list of dask.delayed returned")
+        client = self.get_client(client=client)
+        if client is None:
+            warnings.warn("list of dask.delayed returned")
             return delayed_shapes
-        elif client is None:
-            client = self.client
-            
+        
         # - Client, so let's compute   
         return client.compute(delayed_shapes)
         
     def cbuild_digitalized_shapes(self, parquetfiles, savefile_base, client=None,
                                       chunks=300, load_data=False, **kwargs):
-        """ 
+        """ digitalize the shapes files (parquetfiles) and store them per chunk.
+
         Parameters
         ----------
         parquetfiles: [list of path]
@@ -163,7 +259,7 @@ class PSFShapeAnalysis( object ):
             savefile_base + "_{bins}bins_chunk{i}.parquet"
             
 
-        **kwargs goes to ziffit.build_digitalized_shape
+        **kwargs goes to build_digitalized_shape
         Returns
         -------
         list of: "futures or delayed" depending on client.
@@ -177,24 +273,25 @@ class PSFShapeAnalysis( object ):
         
         bins = self.binning['bins']
         savefile = savefile_base + f"_{bins}bins.parquet"
-        data_delayed = ziffit.build_digitalized_shape(parquetfiles, chunks=chunks,
-                                                        savefile=savefile, # _chunk{i} added inside 
-                                                       **{**self.binning, **kwargs})
+        data_delayed = build_digitalized_shape(parquetfiles, chunks=chunks,
+                                                savefile=savefile, # _chunk{i} added inside 
+                                                **{**self.binning, **kwargs})
         #
         # - Client or not
         #
-        if client is None and not self.has_client():
-            warnings.warn("No dask client given and no dask client sent to the instance. list of dask.delayed returned")
+        client = self.get_client(client=client)
+        if client is None:
+            warnings.warn("list of dask.delayed returned")
             return data_delayed
-        elif client is None:
-            client = self.client
+            
         # - Client, so let's compute
         futures = client.compute(data_delayed)
         if load_data:
             futures = distributed.wait(futures)
-            self.load_fromdir(os.path.dirname(savefile),os.path.basename(savefile).replace(".parquet","*.parquet"),
+            self.load_fromdir(os.path.dirname(savefile), os.path.basename(savefile).replace(".parquet","*.parquet"),
                                   **self.binning)
-            return 
+            return
+        
         return futures
 
     # --------- #
@@ -206,7 +303,6 @@ class PSFShapeAnalysis( object ):
         if self.has_data() and persist:
             self._data = self.client.persist(self.data)
             
-        
     def set_data(self, data, urange=None, vrange=None, bins=None, persist=True):
         """ """
         self._data = data
@@ -306,7 +402,6 @@ class PSFShapeAnalysis( object ):
          
         return mpxl_args
 
-
     def get_fgroup_filename(self, metapixels, filenames=None, nfiles=None):
         """ get filedata grouped by filename and associated filenames (see options)
 
@@ -334,61 +429,6 @@ class PSFShapeAnalysis( object ):
 
         return fgroup, filenames
     
-    def cfetch_metapixels_data(self, metapixels, datakey, client=None, filenames=None, nfiles=None):
-        """ 
-        Parameters
-        ----------
-        client: [Dask Client]
-            Dask client used for the computation.
-
-        datakey: [string]
-            Any in from the psfshape.parquet file.
-
-        filenames: [list of path] -optional-
-            You can limit the list of file that are going to be analysed.
-            if None, all the files that have at least 1 target in the given metapixels
-        
-        nfiles: [int] -optional-
-            only look at the first n-files. 
-            = ignored if filenames is not None =
-
-        """        
-        fgroup, filenames = self.get_fgroup_filename(metapixels, filenames=filenames, nfiles=nfiles)
-            
-        d_data = [delayed(_fetch_filesource_data_)(fname, sources=fgroup.get_group(fname).Source.values,
-                                                        datakey=datakey) for fname in filenames]
-        if client is None and not self.has_client():
-            warnings.warn("No dask client given and no dask client sent to the instance. list of dask.delayed returned")
-            return d_data
-        elif client is None:
-            client = self.client
-            
-        return client.compute(d_data)
-    
-    def cfetch_metapixels_stamps(self, metapixels, which="stars", client=None, filenames=None, nfiles=None):
-        """ 
-        Parameters
-        ----------
-        which: [string]
-            which could only be 'stars', 'model' or 'residual'
-        
-        client: [Dask Client]
-            Dask client used for the computation.
-
-        datakey: [string]
-            Any in from the psfshape.parquet file.
-
-        filenames: [list of path] -optional-
-            You can limit the list of file that are going to be analysed.
-            if None, all the files that have at least 1 target in the given metapixels
-        
-        nfiles: [int] -optional-
-            only look at the first n-files. 
-            = ignored if filenames is not None =
-
-        """        
-        return self.cfetch_metapixels_data()
-            
     def get_metapixels_filedata(self, metapixels):
         """ """
         subdata = self.data[ ["Source","filefracday","fieldid","ccdid","qid","filterid"]
@@ -422,7 +462,7 @@ class PSFShapeAnalysis( object ):
     # ------------- #
     # Client GETTER #
     # ------------- #
-    def cget_median_stampsky(self, metapixels, client, on="stars", buffer=2, gather=True):
+    def cget_median_stamp(self, metapixels, client=None, on="stars", gather=True):
         """ 
         Parameters
         ----------
@@ -430,6 +470,12 @@ class PSFShapeAnalysis( object ):
             on could be stars or residual
            
         """
+        print("TO BE TESTED TO CHECK IF DEPRECATED, SEE cget_metapixels_data")
+        client = self.get_client(client)
+        if client is None:
+            raise ValueError("client requested for this method.")
+
+        
         # dmetapixeldata is lazy
         all_meta = []
         for p_ in metapixels:
@@ -447,23 +493,50 @@ class PSFShapeAnalysis( object ):
         # Logic. Then work on the distributed data
         
         # Grab all the stars for each of them. Computation made on the respective cluster's computer
-        f_stamps = client.map(_fetch_residuals_, f_metapixeldata, datakey=on)
-        
-        # Compute the sky study on them
-        f_skies = client.map(_residual_to_skydata_, f_stamps, buffer=buffer)
-
+        f_stamps = client.map(fetch_parquetsource_data, f_metapixeldata, datakey=on)
+            
         if gather:
-            return client.gather(f_skies)
+            return client.gather(f_stamps)
         
-        return f_skies
+        return f_stamps
 
+    def cget_metapixels_data(self, metapixels, datakey, client=None, filenames=None, nfiles=None):
+        """ 
+        Parameters
+        ----------
+        client: [Dask Client]
+            Dask client used for the computation.
+
+        datakey: [string]
+            Any in from the psfshape.parquet file.
+
+        filenames: [list of path] -optional-
+            You can limit the list of file that are going to be analysed.
+            if None, all the files that have at least 1 target in the given metapixels
+        
+        nfiles: [int] -optional-
+            only look at the first n-files. 
+            = ignored if filenames is not None =
+
+        """        
+        fgroup, filenames = self.get_fgroup_filename(metapixels, filenames=filenames, nfiles=nfiles)
+            
+        d_data = [dask.delayed(fetch_parquetsource_data)(fname, sources=fgroup.get_group(fname).Source.values,
+                                                        datakey=datakey) for fname in filenames]
+
+        client = self.get_client(client=client)
+        if client is None:
+            warnings.warn("list of dask.delayed returned")
+            return d_data
+        
+        return client.compute(d_data)
     
     # --------- #
     #  PLOTTER  #
     # --------- #
     def show_psfshape_maps(self, savefile=None, vmin="3", vmax="97", cvmin=-0.8, cvmax=0.8):
         """ """
-        from ziff.plots import get_threeplot_axes, vminvmax_parser, display_binned2d
+        from ..plots import get_threeplot_axes, vminvmax_parser, display_binned2d
 
         fig, [axd, axm, axr], [cax, caxr] = get_threeplot_axes(fig=None, bottom=0.1, hxspan=0.09)
 
@@ -498,17 +571,6 @@ class PSFShapeAnalysis( object ):
     # ================= #
     #    Properties     #
     # ================= #
-    @property
-    def client(self):
-        """ """
-        if not self.has_client():
-            return None
-        return self._client
-
-    def has_client(self):
-        """ """
-        return hasattr(self, "_client") and self._client is not None
-    
     @property
     def data(self):
         """ """
