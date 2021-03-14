@@ -34,3 +34,28 @@ def get_digit_dir(subdir="", builddir=True):
         os.makedirs(dirout, exist_ok=True)
         
     return dirout
+
+
+def get_filedataframe(files):
+    """ """
+    
+    from ztfquery import buildurl, fields
+    
+    def read_filename(file):
+        _, filefracday,paddedfield, filtercode, ccdid_, _, qid_, suffix =  file.split("/")[-1].split("_")
+        year,month, day, fracday = buildurl.filefrac_to_year_monthday_fracday(filefracday)
+        ccdid = int(ccdid_[1:])
+        qid = int(qid_[1:])        
+        return {"obsdate": f"{year}-{month}-{day}",
+                "fracday":fracday,
+                "filefracday":filefracday,
+                "fieldid":int(paddedfield),
+                "filtername":filtercode,
+                "ccdid":ccdid,
+                "qid":qid,
+                "rcid":fields.ccdid_qid_to_rcid(ccdid,qid),
+                "suffix":suffix,
+                "filename":file
+               }
+
+    return pandas.DataFrame([read_filename(f) for f in files])

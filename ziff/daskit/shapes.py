@@ -48,7 +48,7 @@ def build_digitalized_shape(filenames, urange, vrange, savefile, bins=200, chunk
     - Returns delayed calls - 
 
     """
-    filedf = get_filedataframe(filenames)
+    filedf = zio.get_filedataframe(filenames)
     grouped = filedf.groupby("filefracday")
     groupkeys = list( grouped.groups.keys() )
     
@@ -69,7 +69,7 @@ def build_digitalized_shape(filenames, urange, vrange, savefile, bins=200, chunk
 def build_digitalize_psfdata(filenames, valrange, key, savefile,
                               bins=200, chunks=300, **kwargs):
     """ """
-    filedf = get_filedataframe(filenames)
+    filedf = zio.get_filedataframe(filenames)
     grouped = filedf.groupby("filefracday")
     groupkeys = list( grouped.groups.keys() )
     
