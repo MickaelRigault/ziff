@@ -28,7 +28,7 @@ class DaskCluster( object ):
     # --------- #
     def setup_cluster(self, which="ccin2p3", scale=None, **kwargs):
         """ Set the client from the cluster information """
-        cluster = self.get_cluster( which="ccin2p3", scale=None, **kwargs)
+        cluster = self.get_cluster( which="ccin2p3", scale=scale, **kwargs)
         self.set_client( distributed.Client(cluster) )
             
     # --------- #

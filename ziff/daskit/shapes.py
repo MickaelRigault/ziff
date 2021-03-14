@@ -15,6 +15,7 @@ from ztfquery import buildurl,io
 from .. import base
 from .. import io as zio
 from . import basecluster
+from .psf import get_ziff_psf_cat
 
 def compute_shapes(file_, use_dask=False, incl_residual=True, incl_stars=True,
                        whichpsf="psf_PixelGrid_BasisPolynomial5.piff",
@@ -29,7 +30,7 @@ def compute_shapes(file_, use_dask=False, incl_residual=True, incl_stars=True,
     """
     delayed = basecluster.get_delayed_func(use_dask=use_dask)
 
-    input_needed = delayed(_get_ziff_psf_cat_)(file_, whichpsf=whichpsf)
+    input_needed = delayed(get_ziff_psf_cat)(file_, whichpsf=whichpsf)
     ziff, psf, cat_toshape = input_needed[0],input_needed[1],input_needed[2]
     
     shapes       = delayed(base.get_shapes)(ziff, psf, cat_toshape, store=True, stamp_size=stamp_size,

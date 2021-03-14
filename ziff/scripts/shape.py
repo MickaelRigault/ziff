@@ -16,6 +16,10 @@ import pandas
 from ztfquery import io
 
 
+print("ziff.scripts.shape is DEPRECATED, see ziff.daskit.shapes")
+
+
+
 def _fetch_filesource_data_(filename, datakey, sources=None):
     """ """
     data    = pandas.read_parquet(io.get_file(filename, suffix="psfshape.parquet", check_suffix=False),
