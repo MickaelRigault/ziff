@@ -554,7 +554,7 @@ class PSFShapeAnalysis( basecluster.DaskCluster ):
         imr = display_binned2d(axr, self.shapemaps["residual"]*100, cax=caxr, 
                                       **{**prop,**{"cmap":"coolwarm",
                                                    "vmin":cvmin,"vmax":cvmax}})
-        imr.colorbar.set_ticks([np.round(-cvmin*2/3, 1), 0, np.round(cvmax*2/3, 1)])
+        imr.colorbar.set_ticks([np.round(cvmin*2/3, 1), 0, np.round(cvmax*2/3, 1)])
         [ax.set_yticklabels(["" for _ in ax.get_yticklabels()]) for ax in [axm, axr]]
 
 
