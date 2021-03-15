@@ -245,7 +245,7 @@ class PSFShapeAnalysis( basecluster.DaskCluster ):
         # - Client, so let's compute   
         return client.compute(delayed_shapes)
         
-    def build_digitalized_shape(self, parquetfiles, savefile_base, client=None,
+    def cbuild_digitalized_shape(self, parquetfiles, savefile_base, client=None,
                                       chunks=300, load_data=False, **kwargs):
         """ digitalize the shapes files (parquetfiles) and store them per chunk.
 
