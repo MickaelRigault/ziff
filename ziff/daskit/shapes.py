@@ -48,7 +48,7 @@ def build_digitalized_shape(filenames, urange, vrange, savefile, bins=200, chunk
     - Returns delayed calls - 
 
     """
-    filedf = (filenames)
+    filedf = zio.get_filedataframe(filenames)
     grouped = filedf.groupby("filefracday")
     groupkeys = list( grouped.groups.keys() )
     
@@ -245,7 +245,7 @@ class PSFShapeAnalysis( basecluster.DaskCluster ):
         # - Client, so let's compute   
         return client.compute(delayed_shapes)
         
-    def cbuild_digitalized_shapes(self, parquetfiles, savefile_base, client=None,
+    def build_digitalized_shape(self, parquetfiles, savefile_base, client=None,
                                       chunks=300, load_data=False, **kwargs):
         """ digitalize the shapes files (parquetfiles) and store them per chunk.
 
