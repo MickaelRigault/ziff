@@ -66,7 +66,7 @@ class DaskCluster( object ):
             warnings.warn("No dask client given and no dask client sent to the instance.")
             return None
 
-        return client if client is None else self.client
+        return client if client is not None else self.client
     
     # ================= #
     #    Properties     #

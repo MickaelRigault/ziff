@@ -48,7 +48,7 @@ def build_digitalized_shape(filenames, urange, vrange, savefile, bins=200, chunk
     - Returns delayed calls - 
 
     """
-    filedf = zio.get_filedataframe(filenames)
+    filedf = (filenames)
     grouped = filedf.groupby("filefracday")
     groupkeys = list( grouped.groups.keys() )
     
