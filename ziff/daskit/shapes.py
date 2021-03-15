@@ -197,7 +197,7 @@ class PSFShapeAnalysis( basecluster.DaskCluster ):
 
         dirout = zio.get_digit_dir(psf_suffix, subdir)
         savefile_base = os.path.join(dirout, digit_basename)
-        f_digit = this.cbuild_digitalized_shapes(to_compute, savefile_base, chunks=chunks)
+        f_digit = this.cbuild_digitalized_shape(to_compute, savefile_base, chunks=chunks)
         # - 
         futures_, _ = distributed.wait(f_digit)
         # -
@@ -214,7 +214,7 @@ class PSFShapeAnalysis( basecluster.DaskCluster ):
 
         dirout = zio.get_digit_dir(subdir=subdir)
         savefile_base = os.path.join(dirout, digit_basename)
-        this.cbuild_digitalized_shapes(shapefiles, savefile_base,
+        this.cbuild_digitalized_shape(shapefiles, savefile_base,
                                            chunks=chunks, load_data=True, **kwargs)
         return this
         
