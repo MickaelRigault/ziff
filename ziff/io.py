@@ -38,7 +38,7 @@ def get_digit_dir(subdir="", builddir=True):
 
 def get_filedataframe(files):
     """ """
-    
+    import pandas
     from ztfquery import buildurl, fields
     
     def read_filename(file):
