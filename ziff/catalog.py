@@ -31,11 +31,11 @@ def fetch_ziff_catalog(ziff, which="gaia", as_collection=True, **kwargs):
     Catalog or CatalogCollection
     """
     if ziff.is_single():
-        ra,dec = ziff.get_center(inpixel=False)
+        ra,dec = ziff.get_center(system="radec")
         radius = ziff.get_diagonal(inpixel=False)/1.7 # Not 2 to have some wiggle room
         return fetch_catalog(which, ra, dec, radius, r_unit="deg", **kwargs)
     else:
-        coords = ziff.get_center(inpixel=False)
+        coords = ziff.get_center(system="radec")
         radii  = np.asarray(ziff.get_diagonal(inpixel=False))/1.7
         cats = []
         for (ra_,dec_), radius_ in zip(coords, radii):

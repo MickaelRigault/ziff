@@ -227,7 +227,6 @@ class _ZIFFLogConfig_( object ):
     # -------- #
     #  GETTER  #
     # -------- #
-    
     def get_piff_inputfile(self, catfile=None, imagefile=None, ioconfig=None, verbose=False):
         """ get the PIFF input file given your logger and configurations 
         
@@ -326,6 +325,12 @@ class _ZIFFLogConfig_( object ):
 
 class _ZIFFImageHolder_( _ZIFFLogConfig_ ):
     # IMAGES & MASK (on top of logger & config)
+
+    @classmethod
+    def from_filename(cls, filename, logger=None, **kwargs):
+        """ """
+        ztfimg = ztfimage.ScienceImage.from_filename(filename)
+        return cls.from_ztfimage(ztfimg, logger, **kwargs)
     
     @classmethod
     def from_ztfimage(cls, ztfimage, logger=None, **kwargs):
@@ -415,9 +420,9 @@ class _ZIFFImageHolder_( _ZIFFLogConfig_ ):
         # IO Stuffs        
         return [os.path.dirname(s) for s in self._sciimg]
 
-    def get_center(self, inpixel=True, **kwargs):
+    def get_center(self, system="xy", **kwargs):
         """ """
-        return self._read_images_property_("get_center", isfunc=True, inpixel=inpixel, **kwargs)
+        return self._read_images_property_("get_center", isfunc=True, system=system, **kwargs)
 
     def get_diagonal(self, inpixel=True, **kwargs):
         """ """
