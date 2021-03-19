@@ -562,7 +562,7 @@ class PSFShapeAnalysis( basecluster.DaskCluster ):
         axd.set_title("data", **textprop)
         axm.set_title("model", **textprop)
         axr.set_title("(data-model)/model [%]", **textprop)
-        fig.text(0.5, 0.99, "PSF width (normed per exposure)", va="top", ha="center", weight="bold"
+        fig.text(0.5, 0.99, "PSF width (normed per exposure)", va="top", ha="center", weight="bold")
         
         if savefile:
             fig.savefig(savefile, dpi=300)
