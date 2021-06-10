@@ -26,7 +26,7 @@ class ZiffDask( object ):
     @classmethod
     def compute_single(cls, filename, catisolation=DEFAULT_ISOLATION,
                            fit_gmag=DEFAULT_FIT_GMAG,
-                           shape_gmag=DEFAULT_SHAPE_GMAG,
+                           shape_gmag=DEFAULT_SHAPE_GMAG, shufflecat=True
                            stamp_size=17, interporder=5, nstars=300,
                            maxoutliers=None, **kwargs):
         """ """
@@ -43,12 +43,12 @@ class ZiffDask( object ):
         # Building the catalogs
         cat_tofit = ziff.get_gaia_catalog( isolation=catisolation,
                                             gmag_range=fit_gmag,
-                                            shuffled=shuffled, writeto="psf", 
+                                            shuffled=shufflecat, writeto="psf", 
                                             xyformat="fortran")
 
         cat_toshape = ziff.get_gaia_catalog( isolation=catisolation,
                                             gmag_range=shape_gmag,
-                                            shuffled=shuffled, writeto="shape", 
+                                            shuffled=shufflecat, writeto="shape", 
                                             xyformat="fortran")
         #
         # Fitting the PSF model
