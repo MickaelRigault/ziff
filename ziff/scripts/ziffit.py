@@ -80,7 +80,7 @@ def ziffit_single(file_, use_dask=False, overwrite=False,
                                                  overwrite=overwrite, 
                                                  show_progress= not use_dask, maxnprocess=1)
     sciimg = sciimg_mkimg[0]
-    mkimg  = sciimg_mkimg[1]
+    mkimg  = sciimg_mkimg[1] L
     #
     # - Build Ziff
     if verbose:

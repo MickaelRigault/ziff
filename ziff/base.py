@@ -106,8 +106,10 @@ def get_shapes(ziff, psf, cat, incl_residual=False, incl_stars=False, store=True
         # Matching them to discard the missing cat entries
         from astropy import coordinates, units
         skycat   = coordinates.SkyCoord(*cat.data[["xpos","ypos"]].values.T, unit="arcsec")
-        skystars = coordinates.SkyCoord([[s.image_pos.x, s.image_pos.y] for s in stars], unit="arcsec")
-        catalog_idx, self_idx, d2d, d3d = skycat.search_around_sky(skystars,seplimit=0.2*units.arcsec)
+        skystars = coordinates.SkyCoord([[s.image_pos.x, s.image_pos.y] for s in stars],
+                                            unit="arcsec")
+        catalog_idx, self_idx, d2d, d3d = skycat.search_around_sky(skystars,
+                                                            seplimit=0.2*units.arcsec)
         npoints_star = cat.npoints
         cat = cat.get_catalog(index=cat.data.index[self_idx], shuffled=False)
         warnings.warn(f"{npoints_star-cat.npoints}/{npoints_star} have been drop from the cat when loading stars.")
@@ -699,6 +701,7 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         # - PSF file
         if psffile is not None or fetch_psf:
             self.load_psf(psffile, fetch=fetch_psf)
+            
 
     @classmethod
     def from_file(cls, filename, row=0, **kwargs):
@@ -739,12 +742,14 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         """
         if psffilename is None and fetch:
             from ztfquery import buildurl
-            psffilename_ = [buildurl.filename_to_scienceurl(prefix_, source="local", suffix="output.piff", check_suffix=False)
+            psffilename_ = [buildurl.filename_to_scienceurl(prefix_, source="local",
+                                                            suffix="output.piff",
+                                                            check_suffix=False)
                                for prefix_ in self.get_prefix()]
+                
             psffilename = [None if not os.path.isfile(psf_) else psf_ for psf_ in psffilename_]
             if self.is_single():
                 psffilename = psffilename[0]
-
                 
         # TO BE TESTED, CASE WITH MULTI IMAGES.
         if psffilename is not None:
@@ -824,7 +829,8 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         catalog_ = self._enrich_cat_(catdata,
                                         name=name,
                                         setsky=setsky, setwcs=setwcs, setmask=setmask,
-                                        add_boundfilter=add_boundfilter, bound_padding=bound_padding,
+                                        add_boundfilter=add_boundfilter,
+                                        bound_padding=bound_padding,
                                         isolationlimit=isolationlimit)
 
         return catalog_
@@ -841,7 +847,8 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         """ """
         catalog_ = self._fetch_calibrators_("gaia", name=name,
                                             setsky=setsky, setwcs=setwcs, setmask=setmask,
-                                            add_boundfilter=add_boundfilter, bound_padding=bound_padding,
+                                            add_boundfilter=add_boundfilter,
+                                            bound_padding=bound_padding,
                                             isolationlimit=isolationlimit)
 
         if gmag_range is not None:
@@ -869,10 +876,11 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
                                  ):
         """ """
         catalog_ = self._fetch_calibrators_("ps1", name=name,
-                                                setsky=setsky, setwcs=setwcs, setmask=setmask,
-                                                add_boundfilter=add_boundfilter, bound_padding=bound_padding,
-                                                isolationlimit=isolationlimit,
-                                                )
+                                            setsky=setsky, setwcs=setwcs, setmask=setmask,
+                                            add_boundfilter=add_boundfilter,
+                                            bound_padding=bound_padding,
+                                            isolationlimit=isolationlimit,
+                                            )
 
         
         if gmag_range is not None:
@@ -952,7 +960,8 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
     def get_psf(self, catalog, chipnum=0, flux=1.0, iloc=None, **kwargs):
         """ """
         cat = self.get_catalog(catalog, chipnum=chipnum)
-        xpos, ypos = cat.get_data()[["xpos","ypos"]] if iloc is None else cat.get_data().iloc[iloc][["xpos","ypos"]]
+        xpos, ypos = cat.get_data()[["xpos","ypos"]] if iloc is None else \
+                     cat.get_data().iloc[iloc][["xpos","ypos"]]
         return [eval_psf(xpos_, ypos_, chipnum=chipnum, flux=flux, **kwargs)
                     for xpos_, ypos_ in zip(xpos, ypos) ]
 
@@ -995,7 +1004,8 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         stars  = soll.shapes["stars"].set_index(catmag.index)
         model  = soll.shapes["psfmodel"].set_index(catmag.index)
         
-        mshapes = pandas.merge(stars, model, left_index=True, right_index=True, suffixes=("_stars","_model"))
+        mshapes = pandas.merge(stars, model, left_index=True, right_index=True,
+                                suffixes=("_stars","_model"))
         dataout = pandas.merge(catmag, mshapes, left_index=True, right_index=True)
         if add_imgprop:
             if not self.is_single():
@@ -1024,9 +1034,11 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
                // using self.get_mask()
             - mask: mask image (bool)
         """
-        return self._get_single_stamp_(catalog, which=which, filtered=filtered, fullreturn=fullreturn, **kwargs)
+        return self._get_single_stamp_(catalog, which=which, filtered=filtered,
+                                           fullreturn=fullreturn, **kwargs)
             
-    def _get_single_stamp_(self, catalog, which="data", filtered=True, xyformat="numpy", fullreturn=False, **kwargs):
+    def _get_single_stamp_(self, catalog, which="data", filtered=True,
+                               xyformat="numpy", fullreturn=False, **kwargs):
         """ """
         cat = self.get_catalog(catalog)
         stamps = cat.get_datastamps(self.get_imagedata(which=which, **kwargs),
@@ -1060,8 +1072,8 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         """
         # 1.
         # - parse catalog
-        if type(catalog) == catlib.Catalog and catalog.has_filename() and os.path.isfile(catalog.filename) \
-          and catalog.xyformat == "fortran":
+        if type(catalog) == catlib.Catalog and catalog.has_filename() and \
+          os.path.isfile(catalog.filename) and catalog.xyformat == "fortran":
             print("Input catalog ready")
             cat = catalog # ready
         else:
@@ -1105,6 +1117,20 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
 
         return stars, (cat, inputfile)
 
+    def get_gaia_catalog(self, isolation=15, gmag_range=None, writeto=None,
+                             shuffled=True, xyformat="fortran", **kwargs)
+        """ """
+        if "gaia" not in self.catalog:
+            self.fetch_gaia_catalog(isolationlimit=isolation)
+
+        gmagfilter = {'gmag_outrange':['gmag', gmag_range]} if gmag_range is not None else None
+        
+        return self.get_catalog("gaia", filtered=True, shuffled=shuffled, 
+                                writeto=writeto,
+                                add_filter=gmagfilter, xyformat=xyformat,
+                                **kwargs)
+        
+        
     # ------- #
     # FITTER  #
     # ------- #

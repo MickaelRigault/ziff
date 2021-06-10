@@ -809,7 +809,8 @@ class Catalog(object):
         idx1, idx2 = self.match(refcat, seplimit=seplimit*units.arcsec, filtered=False)
         unique, counts = np.unique(idx1, return_counts=True)
         self.data["n_nearsources"] = counts-1
-        self.data['is_isolated'] = (self.data["n_nearsources"]==0)        
+        self.data['is_isolated'] = (self.data["n_nearsources"]==0)
+        
     #---------- #
     # FILTERING #
     #---------- #
@@ -1474,7 +1475,7 @@ class _CatalogHolder_( object ):
     #  GETTER  #
     # -------- #
     def get_catalog(self, catalog, chipnum=None, xyformat=None,
-                        filtered=False, shuffled=False,
+                        filtered=False, shuffled=False, verbose=True,
                         add_filter=None, writeto=None, writetoprop={}):
         """ Eval if catalog is a name or an object. Returns the object 
         = This returns a copy of the requested catalog = 
@@ -1524,8 +1525,9 @@ class _CatalogHolder_( object ):
                 writeto = catalog.build_filename(self.prefix+"tmpcat_", extension=".fits")
             elif  writeto == "tmp":
                 writeto = catalog.build_filename("tmpcat_", extension=".fits")
-                
-            print(f"Storing catalog to {writeto}")
+
+            if verbose:
+                print(f"Storing catalog to {writeto}")
                 
             catalog.write_to(writeto, store_filename=True, #stores as catalog.filename
                                  **{**dict(filtered=False), **writetoprop})
