@@ -26,7 +26,7 @@ class ZiffDask( object ):
     @classmethod
     def compute_single(cls, filename, catisolation=DEFAULT_ISOLATION,
                            fit_gmag=DEFAULT_FIT_GMAG,
-                           shape_gmag=DEFAULT_SHAPE_GMAG, shufflecat=True
+                           shape_gmag=DEFAULT_SHAPE_GMAG, shufflecat=True,
                            stamp_size=17, interporder=5, nstars=300,
                            maxoutliers=None, **kwargs):
         """ """
