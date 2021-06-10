@@ -159,7 +159,7 @@ def dataframe_to_hdu(dataframe, drop_notimplemented=True):
     cols = []
     df = dataframe.reset_index()
     for _key in df.keys():
-        type_ = df[_key].dtype
+        type_ = str(df[_key].dtype).lower()
         
         if type_ == "object":
             if drop_notimplemented:
@@ -167,16 +167,16 @@ def dataframe_to_hdu(dataframe, drop_notimplemented=True):
                 continue
             raise NotImplementedError(f"column type {type_} conversion to fits format not implemented")
         
-        if type_ in ['int','int64',"Int64"]:
+        if "int" in type_:
             format = 'K'
             value = df[_key].astype('int')
-        elif type_ == 'float':
+        elif "float" in type_:
             format = 'D'
             value = df[_key].astype('float')
-        elif type_ == 'bool' or type_ == 'boolean':
+        elif 'bool' in type_:
             format = 'L'
             value = df[_key].astype('bool')
-        elif type_ == 'string':
+        elif 'str' in type_:
             format = 'A'
             value = df[_key].astype('string')
         else:

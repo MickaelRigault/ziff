@@ -1126,9 +1126,9 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         gmagfilter = {'gmag_outrange':['gmag', gmag_range]} if gmag_range is not None else None
         
         return self.get_catalog("gaia", filtered=True, shuffled=shuffled, 
-                                writeto=writeto,
-                                add_filter=gmagfilter, xyformat=xyformat,
-                                **kwargs)
+                                    writeto=writeto,
+                                    add_filter=gmagfilter, xyformat=xyformat,
+                                    **kwargs)
         
         
     # ------- #
