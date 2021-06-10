@@ -222,10 +222,10 @@ class Catalog(object):
             
     def __str__(self):
         """ printing method """
-        out = "{} object \n".format(self.__class__.__name__)
-        out += "Name  : {}\n".format(self._name)
+        out = f"{self.__class__.__name__} object \n"
+        out += f"Name  : {self._name}\n"
         if hasattr(self, '_data'):
-            out += "Number of stars : {}".format(np.size(self.data.loc[~self.filterout],axis=0))
+            out += f"Number of stars : {np.size(self.data.loc[~self.filterout],axis=0)}"
         return out
 
     def copy(self, name = None, **kwargs):
