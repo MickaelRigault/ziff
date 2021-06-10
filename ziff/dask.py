@@ -52,11 +52,11 @@ class ZiffDask( object ):
                                             xyformat="fortran")
         #
         # Fitting the PSF model
-        psf    = delayed(base.estimate_psf)(ziff, cat_tofit, stamp_size=stamp_size,
+        psf    = dask.delayed(base.estimate_psf)(ziff, cat_tofit, stamp_size=stamp_size,
                                             interporder=interporder, nstars=nstars,
                                             maxoutliers=maxoutliers, verbose=False)
         # Shapes
-        shapes  = delayed(base.get_shapes)(ziff, psf, cat_toshape, store=True,
+        shapes  = dask.delayed(base.get_shapes)(ziff, psf, cat_toshape, store=True,
                                             stamp_size=stamp_size,
                                             incl_residual=True, incl_stars=True)
         return psf, shapes
