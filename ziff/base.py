@@ -1118,7 +1118,7 @@ class ZIFF( _ZIFFImageHolder_, catlib._CatalogHolder_  ):
         return stars, (cat, inputfile)
 
     def get_gaia_catalog(self, isolation=15, gmag_range=None, writeto=None,
-                             shuffled=True, xyformat="fortran", **kwargs)
+                             shuffled=True, xyformat="fortran", **kwargs):
         """ """
         if "gaia" not in self.catalog:
             self.fetch_gaia_catalog(isolationlimit=isolation)
